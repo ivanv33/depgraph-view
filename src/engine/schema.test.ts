@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  findCycle, isDate, isOldIndex, normalizePlan, serializeIndex, serializePlan, slugify, uniqueId, validateIndex, validatePlan, type Plan,
+  findCycle, isDate, normalizePlan, slugify, uniqueId, validatePlan, type Plan,
 } from './schema.js'
 
 const node = (id: string, depends_on: string[] = [], extra: Partial<Plan['nodes'][number]> = {}) => ({
@@ -75,16 +75,6 @@ describe('normalizePlan', () => {
   })
 })
 
-describe('serializePlan', () => {
-  it('is deterministic with 2-space indent and trailing newline', () => {
-    const plan: Plan = { name: 'p', nodes: [node('b'), node('a')] }
-    const text = serializePlan(plan)
-    expect(text.endsWith('\n')).toBe(true)
-    expect(text).toBe(JSON.stringify(normalizePlan(plan), null, 2) + '\n')
-    expect(serializePlan(JSON.parse(text))).toBe(text)
-  })
-})
-
 describe('slugify / uniqueId', () => {
   it('slugifies', () => {
     expect(slugify('  Size 6-12mo Runway! ')).toBe('size-6-12mo-runway')
@@ -127,7 +117,7 @@ describe('hold', () => {
     expect(validatePlan({ name: 'p', nodes: [node('a', [], { hold: 'x'.repeat(100) + '\n\n\n' + 'y'.repeat(99) })] })).toEqual([])
   })
   it('plans without hold serialize unchanged', () => {
-    expect(serializePlan({ name: 'p', nodes: [node('a')] })).not.toContain('hold')
+    expect('hold' in normalizePlan({ name: 'p', nodes: [node('a')] }).nodes[0]).toBe(false)
   })
 })
 
@@ -156,31 +146,8 @@ describe('due and priority', () => {
   })
 })
 
-describe('plan JSON (connections only)', () => {
-  it('detects the old format by any key besides id and depends_on', () => {
-    expect(isOldIndex({ name: 'P', nodes: [{ id: 'a', depends_on: [] }] })).toBe(false)
-    expect(isOldIndex({ name: 'P', nodes: [{ id: 'a', title: 'A' }] })).toBe(true)
-    expect(isOldIndex(null)).toBe(false)
-  })
-  it('validates the shape with validatePlan messages', () => {
-    expect(validateIndex({ name: 'P', nodes: [{ id: 'a' }, { id: 'b', depends_on: ['a'] }] })).toEqual([])
-    expect(validateIndex([])).toEqual(['plan must be an object'])
-    expect(validateIndex({ nodes: 'x' })).toEqual(['name must be a string', 'nodes must be an array'])
-    expect(validateIndex({ name: 'P', nodes: [1, { id: 'A' }, { id: 'a' }, { id: 'a' }, { id: 'b', depends_on: 'a' }] })).toEqual([
-      'node 0: must be an object',
-      'node 1: id "A" does not match ^[a-z0-9][a-z0-9-]*$',
-      'node 3: duplicate id "a"',
-      'node "b": depends_on must be an array of strings',
-    ])
-  })
-  it('serializes ids and sorted depends_on only, sorted by id', () => {
-    const plan = { name: 'P', nodes: [
-      { id: 'b', title: 'B', description: '', status: 'todo' as const, tags: [], depends_on: ['c', 'a'] },
-      { id: 'a', title: 'A', description: 'x', status: 'done' as const, tags: ['t'], depends_on: [], due: '2026-11-26' },
-    ] }
-    expect(serializeIndex(plan)).toBe(
-      '{\n  "name": "P",\n  "nodes": [\n    {\n      "id": "a",\n      "depends_on": []\n    },\n' +
-        '    {\n      "id": "b",\n      "depends_on": [\n        "a",\n        "c"\n      ]\n    }\n  ]\n}\n',
-    )
-  })
+it('carries no plan-file helpers (the app keeps its own, D9)', async () => {
+  const m = await import('./schema.js')
+  for (const k of ['serializePlan', 'isInlineEntry', 'isOldIndex', 'invalidInlineKeys', 'validateIndex', 'planFileProblem', 'serializeIndex', 'PlanFileError'])
+    expect(m, k).not.toHaveProperty(k)
 })
