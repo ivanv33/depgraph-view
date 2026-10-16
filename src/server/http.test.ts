@@ -1,11 +1,11 @@
-import { symlinkSync } from 'node:fs'
+import { symlinkSync, writeFileSync } from 'node:fs'
 import { createServer, request, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { makeFolder, removeFolders } from './__tests__/folder.js'
 import { contentType, createHandler } from './http.js'
-import type { GraphSource } from './live.js'
+import type { GraphSource, LiveEvent } from './live.js'
 import { PortInUseError } from './port.js'
 import { startServer, type RunningServer } from './start.js'
 
@@ -107,11 +107,51 @@ describe('startServer', () => {
       expect(head.headers.get(h), h).toBe(get.headers.get(h))
     expect(await head.text()).toBe('')
   })
+  it('streams reload events on /events', async () => {
+    const r = await fetch(`${server.url}events`)
+    expect(r.headers.get('content-type')).toBe('text/event-stream')
+    expect(r.headers.get('cache-control')).toBe('no-cache')
+    expect(r.headers.get('connection')).toBe('keep-alive')
+    expect(r.headers.get('x-content-type-options')).toBe('nosniff')
+    const reader = r.body!.getReader()
+    const decoder = new TextDecoder()
+    expect(decoder.decode((await reader.read()).value)).toBe('retry: 1000\n\n')
+    // The OS-level watch starts a moment after chokidar's ready and may first report the fixture's own
+    // creation, so wait out that gap and read frames until a reload carries the edit.
+    await new Promise(resolve => setTimeout(resolve, 300))
+    writeFileSync(join(root, 'a.md'), '---\ntitle: Water the beans\n---\n')
+    let title = 'Sow the beans'
+    while (title !== 'Water the beans') {
+      const text = decoder.decode((await reader.read()).value)
+      expect(text).toMatch(/^event: reload\ndata: \{"generatedAt":"[^"]+"\}\n\n$/)
+      title = (await (await fetch(`${server.url}api/graph`)).json()).plan.nodes[0].title
+    }
+    await reader.cancel()
+  })
+  it('ends open /events streams on close', async () => {
+    const reader = (await fetch(`${server.url}events`)).body!.getReader()
+    await reader.read()
+    await server.close()
+    await expect(reader.read().then(r => r.done)).rejects.toThrow()
+  })
+  it('does not watch with watch: false', async () => {
+    const still = await startServer({ path: root, port: 0, distDir, watch: false })
+    try {
+      writeFileSync(join(root, 'a.md'), '---\ntitle: Water the beans\n---\n')
+      await new Promise(resolve => setTimeout(resolve, 500))
+      expect((await (await fetch(`${still.url}api/graph`)).json()).plan.nodes[0].title).toBe('Sow the beans')
+    } finally {
+      await still.close()
+    }
+  })
 })
 
 describe('createHandler', () => {
   let bare: Server
-  afterEach(() => new Promise<void>(resolve => bare.close(() => resolve())))
+  afterEach(() => {
+    bare.closeAllConnections()
+    return new Promise<void>(resolve => bare.close(() => resolve()))
+  })
   it('turns a thrown error into a generic 500', async () => {
     const source: GraphSource = {
       current: () => { throw new Error('EACCES: /private/plan/a.md') },
@@ -124,6 +164,28 @@ describe('createHandler', () => {
     expect(r.status).toBe(500)
     expect(r.headers.get('content-type')).toBe('text/plain; charset=utf-8')
     expect(await r.text()).not.toContain('/private')
+  })
+  it('writes error events on /events and unsubscribes when the client goes', async () => {
+    const listeners = new Set<(e: LiveEvent) => void>()
+    const source: GraphSource = {
+      current: () => { throw new Error('unused') },
+      on: listener => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+      close: async () => {},
+    }
+    bare = createServer(createHandler(source, makeFolder({})))
+    await new Promise<void>(resolve => bare.listen(0, '127.0.0.1', resolve))
+    const reader = (await fetch(`http://127.0.0.1:${(bare.address() as AddressInfo).port}/events`)).body!.getReader()
+    const decoder = new TextDecoder()
+    let text = decoder.decode((await reader.read()).value)
+    expect(listeners.size).toBe(1)
+    for (const l of listeners) l({ type: 'error', message: 'graph.json: "bad" input' })
+    while (!text.endsWith('\n\n') || text === 'retry: 1000\n\n') text += decoder.decode((await reader.read()).value)
+    expect(text).toBe('retry: 1000\n\nevent: error\ndata: {"message":"graph.json: \\"bad\\" input"}\n\n')
+    await reader.cancel()
+    await expect.poll(() => listeners.size).toBe(0)
   })
 })
 

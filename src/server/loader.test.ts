@@ -99,6 +99,7 @@ describe('loadGraph', () => {
     const r = loadGraph(root, { name: 'G', nodes: [{ id: 'a', md: 'nodes/a.md', dir: 'ctx/a' }] })
     expect(r.resources.a).toEqual(['sub/b.png', 'z.txt'])
     expect(r.folders.a).toBe(join(root, 'ctx/a'))
+    expect(r.mdFiles.a).toBe(join(root, 'nodes/a.md'))
   })
   it('uses the md file\'s folder when there is no dir', () => {
     const root = makeFolder({ 'nodes/b/b.md': '', 'nodes/b/photo.png': '' })

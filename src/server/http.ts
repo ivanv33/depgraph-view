@@ -1,7 +1,7 @@
 import { createReadStream, statSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
-import type { GraphSource } from './live.js'
+import type { GraphSource, LiveEvent } from './live.js'
 import { insideRoot } from './paths.js'
 
 const TEXT = 'text/plain; charset=utf-8'
@@ -61,6 +61,21 @@ function decodeSegments(segments: string[]): string | null {
   }
 }
 
+/** One Server-Sent Events frame: the event name and its JSON payload. */
+function frame(e: LiveEvent): string {
+  const data = e.type === 'reload' ? { generatedAt: e.generatedAt } : { message: e.message }
+  return `event: ${e.type}\ndata: ${JSON.stringify(data)}\n\n`
+}
+
+/** Holds the response open and writes every event of `source` until the client goes. */
+function sendEvents(source: GraphSource, req: IncomingMessage, res: ServerResponse): void {
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
+  if (req.method === 'HEAD') return void res.end()
+  res.write('retry: 1000\n\n')
+  const off = source.on(e => res.write(frame(e)))
+  res.on('close', off)
+}
+
 function route(source: GraphSource, distDir: string, req: IncomingMessage, res: ServerResponse): void {
   if (req.method !== 'GET' && req.method !== 'HEAD')
     return send(req, res, 405, { 'Content-Type': TEXT, Allow: 'GET, HEAD' }, 'Method not allowed\n')
@@ -74,6 +89,7 @@ function route(source: GraphSource, distDir: string, req: IncomingMessage, res: 
     const json = JSON.stringify({ plan, resources, warnings, bodies, generatedAt })
     return send(req, res, 200, { 'Content-Type': contentType('graph.json'), 'Cache-Control': 'no-store' }, json)
   }
+  if (rawPath === '/events') return sendEvents(source, req, res)
   const [, head, ...rest] = rawPath.split('/')
   if (head === 'assets' && rest.length > 0) {
     const rel = decodeSegments(rest)

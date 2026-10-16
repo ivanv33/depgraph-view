@@ -15,6 +15,8 @@ export interface LoadResult {
   bodies: Record<string, string>
   /** Each node's folder as an absolute realpath; server-internal, never sent to the page. */
   folders: Record<string, string>
+  /** Each node's md file as an absolute realpath; server-internal, never sent to the page. */
+  mdFiles: Record<string, string>
   warnings: string[]
 }
 
@@ -75,7 +77,7 @@ export function loadGraph(rootDir: string, json: unknown): LoadResult {
   } catch {
     throw new GraphError(`folder not found: ${rootDir}`)
   }
-  const out: LoadResult = { plan: { name, nodes: [] }, resources: {}, bodies: {}, folders: {}, warnings: [] }
+  const out: LoadResult = { plan: { name, nodes: [] }, resources: {}, bodies: {}, folders: {}, mdFiles: {}, warnings: [] }
   const warn = (id: string, text: string) => out.warnings.push(`node "${id}": ${text}`)
   const kept: PlanNode[] = []
   for (const { id, md, dir, dependsOn, common } of entries) {
@@ -100,6 +102,7 @@ export function loadGraph(rootDir: string, json: unknown): LoadResult {
     }
     kept.push(nodeFromFile(id, { ...common, ...data }, dependsOn))
     out.bodies[id] = body
+    out.mdFiles[id] = mdPath
     if (folder === null) {
       out.resources[id] = []
       warn(id, 'dir not found')
