@@ -351,7 +351,7 @@ export const CHAIN_FRAME = {
    * Never past planFrame, which also counts the titles drawn past the cards.
    */
   maxZ: (plan: PlanPt[], view: View, fovDeg: number, host: Partial<Insets> = {}, legend = true): number => {
-    const opts = { pad: FRAME.fitPad, ...frameInsets(view, host, legend) }
+    const opts = { pad: FRAME.fitPad, ...planStrips(plan, view, fovDeg, host, legend) }
     const cards = cardsOf(plan)
     return Math.max(nearestChainZ(view, fovDeg), frameFor(cards, view, fovDeg, { ...opts, maxZ: Infinity }).position.z, laneZ(cards, plan.filter(p => p.bend), view, fovDeg, opts))
   },
@@ -560,17 +560,16 @@ export function planFrame(plan: PlanPt[], view: View, fovDeg: number, host: Part
 
 /**
  * The strips the whole plan's frame keeps clear (planFrame): the host's (frameInsets) and, while `legend` shows, the
- * legend's room in the bottom-left corner. On a view at least FRAME.legendMinW wide that is the left strip, as
- * frameInsets has it. Narrower, the legend covers only that corner of a smaller view, so the plan is first framed with no
+ * legend's room in the bottom-left corner. The legend covers only that corner, so the plan is first framed with no
  * strip for it; when that frame keeps every card, title and lane clear of the corner (FRAME.leftInset wide,
- * FRAME.legendTop tall) it is the frame. Otherwise the corner is kept clear either by a left strip FRAME.leftInset wide
- * or by a bottom strip up to the legend's top edge (on a view tall enough for it, as frameInsets has it), whichever
- * shows the plan larger; a tie keeps frameInsets' choice. A host left strip at least as wide as the legend's already
+ * FRAME.legendTop tall) it is the frame. Otherwise the corner is kept clear by frameInsets' strip (on a view at least
+ * FRAME.legendMinW wide the left strip), a left strip FRAME.leftInset wide or a bottom strip up to the legend's top
+ * edge (on a view tall enough for it), whichever shows the plan larger; a tie keeps frameInsets' choice. A host left strip at least as wide as the legend's already
  * holds it: then the strips are frameInsets'.
  */
 export function planStrips(plan: PlanPt[], view: View, fovDeg: number, host: Partial<Insets> = {}, legend = true): Insets {
   const usual = frameInsets(view, host, legend)
-  if (!legend || view.w < FRAME.legendShowW || view.w >= FRAME.legendMinW || (host.left ?? 0) >= FRAME.leftInset || cardsOf(plan).length === 0) return usual
+  if (!legend || view.w < FRAME.legendShowW || (host.left ?? 0) >= FRAME.leftInset || cardsOf(plan).length === 0) return usual
   const none = frameInsets(view, host, false)
   if (!reachesCorner(plan, planFrameIn(plan, view, fovDeg, none), view, fovDeg)) return none
   const left = { ...none, left: Math.max(none.left, FRAME.leftInset), right: frameInsets(view, { ...host, left: Math.max(host.left ?? 0, FRAME.leftInset) }, false).right }
@@ -593,7 +592,8 @@ export function planStrips(plan: PlanPt[], view: View, fovDeg: number, host: Par
  * Whether the plan framed by `f` draws into the legend's corner (the view's bottom-left, FRAME.leftInset wide and
  * FRAME.legendTop tall): the slot box's bottom-left corner grown by what an undated card draws past its slot at that
  * zoom (pastSlots), a step drawn larger for a soon due date as drawn, or an arrow's lane or bend. The same points
- * whether or not the titles were measured (the words run right, away from the corner).
+ * whether or not the titles were measured (the words run right, away from the corner). The box, not each step: an
+ * arrow into a bottom step can curve through the corner from a lane far left of it.
  */
 function reachesCorner(plan: PlanPt[], f: Frame, view: View, fovDeg: number): boolean {
   const ppu = pxPerUnit(f.position.z, fovDeg, view.h)

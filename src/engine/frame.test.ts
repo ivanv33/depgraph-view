@@ -755,7 +755,7 @@ describe('frames always contain what they frame', () => {
     it(`a wide plan (32 slots in a row) fits whole inside the free area at ${view.w}x${view.h}`, () => {
       const corners = [{ x: -32 * 103, y: 22 }, { x: 32 * 103, y: -400 }]
       const f = planFrame(corners, view, fov)
-      for (const p of corners) inside(view, frameInsets(view), project(f, view, p))
+      for (const p of corners) inside(view, planStrips(corners, view, fov), project(f, view, p))
       const moves: { z: number }[] = []
       fitPlan({ nodes: () => corners, fov: () => fov, view: () => view, move: (position: { z: number }) => moves.push(position) })
       expect(moves[0].z).toBeCloseTo(f.position.z, 9)
@@ -881,10 +881,10 @@ describe('planFitTracker', () => {
 })
 
 describe('fitPlan with the legend', () => {
-  it('keeps the legend strip clear only while the legend shows', () => {
+  it('keeps the legend strip clear only while the legend shows, for a plan that reaches its corner', () => {
     const moves: [{ x: number }, { x: number }, number][] = []
     const host = {
-      nodes: () => [{ x: -1000, y: -100 }, { x: 1000, y: 100 }],
+      nodes: () => [{ x: -1000, y: -400 }, { x: 1000, y: 400 }],
       fov: () => 60,
       view: () => ({ w: 1280, h: 720 }),
       move: (position: { x: number }, lookAt: { x: number }, ms: number) => moves.push([position, lookAt, ms]),
@@ -896,9 +896,16 @@ describe('fitPlan with the legend', () => {
     expect(moves[0][1].x).toBeLessThan(moves[1][1].x)
     expect(moves[1][1].x).toBeCloseTo(0, 5)
   })
+
+  it('at 1280x720 frames a flat plan that never reaches the corner as if no legend showed', () => {
+    const plan = [{ x: -1000, y: -100 }, { x: 1000, y: 100 }]
+    const view = { w: 1280, h: 720 }
+    expect(planStrips(plan, view, 60, { right: 0 }, true)).toEqual(frameInsets(view, { right: 0 }, false))
+    expect(planFrame(plan, view, 60, { right: 0 }, true)).toEqual(planFrame(plan, view, 60, { right: 0 }, false))
+  })
 })
 
-describe("planStrips: the legend's corner on a view narrower than FRAME.legendMinW", () => {
+describe("planStrips: the legend's corner", () => {
   const fov = 50
   const view = { w: 880, h: 700 }
   const host = { top: 64, right: 0, bottom: 0, left: 0 }
@@ -930,8 +937,12 @@ describe("planStrips: the legend's corner on a view narrower than FRAME.legendMi
       expect(left >= FRAME.leftInset - 1e-6 || bottom <= view.h - FRAME.legendTop + 1e-6).toBe(true)
     }
   })
-  it("leaves the strips as frameInsets has them on a wide view, with the legend off, below the legend's width, or under a host left strip", () => {
-    for (const [v, h, legend] of [[{ w: 1100, h: 900 }, host, true], [view, host, false], [{ w: 600, h: 900 }, host, true], [view, { ...host, left: 300 }, true]] as const)
+  it('keeps the left strip on a view at least FRAME.legendMinW wide for a plan that reaches the corner without it', () => {
+    const w = { w: 1100, h: 900 }
+    expect(planStrips(tall, w, fov, host)).toEqual(frameInsets(w, host, true))
+  })
+  it("leaves the strips as frameInsets has them with the legend off, below the legend's width, or under a host left strip", () => {
+    for (const [v, h, legend] of [[view, host, false], [{ w: 600, h: 900 }, host, true], [view, { ...host, left: 300 }, true]] as const)
       expect(planStrips(tall, v, fov, h, legend)).toEqual(frameInsets(v, h, legend))
   })
 })
@@ -1564,8 +1575,10 @@ describe('the whole-plan frame keeps every arrow bend inside the window', () => 
       const right = view.w - insets.right - Math.max(...xs.map(s.x))
       expect(left).toBeGreaterThanOrEqual(M - 1e-6)
       expect(right).toBeGreaterThanOrEqual(M - 1e-6)
-      // no farther out than the bends take
-      expect(Math.min(left, right)).toBeCloseTo(M, 3)
+      // no farther out than the bends take, unless the plan reaches the legend's corner and is framed in the band above
+      // it, where its height binds first
+      const above = insets.bottom > frameInsets(view, {}, false).bottom
+      if (!above) expect(Math.min(left, right)).toBeCloseTo(M, 3)
     })
 
     it(`still keeps every card and title of that plan at least ${M} px inside the free area at ${view.w}x${view.h}`, () => {
