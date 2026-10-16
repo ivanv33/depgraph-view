@@ -308,7 +308,7 @@ import 'depgraph-view/viewer.css'
 | `onSelect` | `(id: string \| null) => void` | Called on a click: a step's id, or `null` for the background. |
 | `grouped` | `boolean` | Draw only the path to the selection and its subtree; other branches fold into decks. |
 | `today` | `string` | The local date, `YYYY-MM-DD`, that due dates are read against. |
-| `insets` | `{ top, right, bottom, left }` | How far the host's chrome (toolbar, panel) reaches in from each window edge, in CSS pixels. `Graph` never measures the host page. Whatever the insets say, `Graph` always keeps a 72 px top band clear and, while `legend` is on, the Legend's room (on views at least 900 px wide, a 240 px left band). |
+| `insets` | `{ top, right, bottom, left }` | How far the host's chrome (toolbar, panel) reaches in from each window edge, in CSS pixels. `Graph` never measures the host page. Whatever the insets say, `Graph` always keeps a 72 px top band clear and, while `legend` is on, the Legend's corner: the whole plan keeps a 240 px left band or the band above the Legend, whichever shows it larger, only when it would otherwise reach that corner. When the insets change (a panel opens or closes), `Graph` frames again into the new free area, unless the user has moved the camera since the last frame. |
 | `fitAll` | `number` | Change it to frame the whole plan; the selection stays. |
 | `onGlides` | `(history) => void` | Optional. Receives the transition timing history after each transition. |
 | `focusFallback` | `() => HTMLElement \| null` | Optional. Where keyboard focus goes when no step label can take it. |
