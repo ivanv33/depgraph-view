@@ -383,3 +383,28 @@ describe('references/viewer.md', () => {
     expect(md).toContain('--no-watch --port 0')
   })
 })
+
+/** The text of a README section: from its `## heading` line to the next `## ` heading. */
+function readmeSection(readme: string, heading: string): string {
+  const start = readme.indexOf(`\n${heading}\n`)
+  expect(start, heading).toBeGreaterThan(-1)
+  const rest = readme.slice(start + heading.length + 2)
+  const end = rest.search(/\n## /)
+  return end === -1 ? rest : rest.slice(0, end)
+}
+
+describe('README', () => {
+  it('the README documents the skill', () => {
+    const readme = read('README.md')
+    const at = (heading: string) => readme.indexOf(`\n${heading}\n`)
+    expect(at('## Install')).toBeGreaterThan(-1)
+    expect(at('## Install the skill')).toBeGreaterThan(at('## Install'))
+    expect(at('## CLI reference')).toBeGreaterThan(at('## Install the skill'))
+    const section = readmeSection(readme, '## Install the skill')
+    const add = `npx skills add ${pkg.repository.replace(/^github:/, '')}`
+    expect(section).toContain(`\`\`\`sh\n${add}\n`)
+    expect(section).toContain(`${add} -g -a claude-code`)
+    expect(section).toContain('skills/depgraph/SKILL.md')
+    expect(readmeSection(readme, '## Development')).toContain('skills/')
+  })
+})

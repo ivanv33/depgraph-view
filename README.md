@@ -55,6 +55,17 @@ As a dependency in `package.json`:
 
 A git install builds the package from source, so it is slower than installing the npm package.
 
+## Install the skill
+
+The repo ships a skill that teaches Claude, and the other agents the [`skills`](https://www.npmjs.com/package/skills) CLI supports, to write and change plan files and to run this viewer.
+
+```sh
+npx skills add ivanv33/depgraph-view
+npx skills add ivanv33/depgraph-view -g -a claude-code
+```
+
+The first installs it into the current project; the second installs it for your user, for Claude Code. The skill edits only the plan folder it is pointed at, and runs the viewer pinned to this release. Its full text is in [`skills/depgraph/SKILL.md`](skills/depgraph/SKILL.md).
+
 ## CLI reference
 
 ```
@@ -329,7 +340,7 @@ npm run test:e2e    # builds, then runs the Playwright specs through the CLI
 
 The Playwright specs serve a fictional fixture through the CLI on port `4390`, or the port in `DEPGRAPH_VIEW_E2E_PORT`. The performance spec uses that port + 1.
 
-The screenshots in `docs/` are not part of the npm package.
+The screenshots in `docs/` are not part of the npm package. Nor is the skill, which lives in `skills/`.
 
 ## License
 
