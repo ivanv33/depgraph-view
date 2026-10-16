@@ -937,6 +937,32 @@ describe("planStrips: the legend's corner", () => {
       expect(left >= FRAME.leftInset - 1e-6 || bottom <= view.h - FRAME.legendTop + 1e-6).toBe(true)
     }
   })
+  it("keeps the corner clear of the lanes' box: its bottom-left, not either bend point alone", () => {
+    // the slot box x -300..300, y 20..-500, with lanes 200 units left of it down to the bottom row: the bend points are
+    // the lanes' top-left and bottom-right, neither in the corner, while the box they span reaches it
+    const plan = [{ x: -300, y: 20 }, { x: 300, y: -500 }, { x: -500, y: 0, bend: true }, { x: 200, y: -480, bend: true }]
+    for (const v of [{ w: 1440, h: 900 }, { w: 1100, h: 900 }]) {
+      const s = planStrips(plan, v, fov, host)
+      expect(s, `${v.w}x${v.h}`).not.toEqual(frameInsets(v, host, false))
+      const f = planFrame(plan, v, fov, host)
+      const ppu = pxPerUnit(f.position.z, fov, v.h)
+      const left = v.w / 2 + (-500 - f.lookAt.x) * ppu, bottom = v.h / 2 - (-480 - f.lookAt.y) * ppu
+      expect(left >= FRAME.leftInset - 1e-6 || bottom <= v.h - FRAME.legendTop + 1e-6, `${v.w}x${v.h}: the lanes' bottom-left is clear`).toBe(true)
+    }
+  })
+  it('places a height-bound plan with the lanes counted, so a left strip that shifts it keeps every lane inside', () => {
+    // lanes 120 units left of the slot box, down to the bottom row: framed beside a 240 px left strip at 880x700
+    const plan = [{ x: -250, y: 20 }, { x: 250, y: -700 }, { x: -370, y: 0, bend: true }, { x: 0, y: -680, bend: true }]
+    const s = planStrips(plan, view, fov, host)
+    expect(s.left, 'the premise: the left strip').toBe(FRAME.leftInset)
+    const f = planFrame(plan, view, fov, host)
+    const ppu = pxPerUnit(f.position.z, fov, view.h)
+    for (const b of plan.filter(p => p.bend)) {
+      const x = view.w / 2 + (b.x - f.lookAt.x) * ppu
+      expect(x).toBeGreaterThanOrEqual(s.left + FRAME.edgeMargin - 1e-6)
+      expect(x).toBeLessThanOrEqual(view.w - s.right - FRAME.edgeMargin + 1e-6)
+    }
+  })
   it('keeps the left strip on a view at least FRAME.legendMinW wide for a plan that reaches the corner without it', () => {
     const w = { w: 1100, h: 900 }
     expect(planStrips(tall, w, fov, host)).toEqual(frameInsets(w, host, true))

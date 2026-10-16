@@ -591,9 +591,9 @@ export function planStrips(plan: PlanPt[], view: View, fovDeg: number, host: Par
 /**
  * Whether the plan framed by `f` draws into the legend's corner (the view's bottom-left, FRAME.leftInset wide and
  * FRAME.legendTop tall): the slot box's bottom-left corner grown by what an undated card draws past its slot at that
- * zoom (pastSlots), a step drawn larger for a soon due date as drawn, or an arrow's lane or bend. The same points
- * whether or not the titles were measured (the words run right, away from the corner). The box, not each step: an
- * arrow into a bottom step can curve through the corner from a lane far left of it.
+ * zoom (pastSlots), a step drawn larger for a soon due date as drawn, or the bottom-left of the box the arrows' lanes
+ * and bends span. The same points whether or not the titles were measured (the words run right, away from the corner).
+ * The boxes, not each step: an arrow into a bottom step can curve through the corner from a lane far left of it.
  */
 function reachesCorner(plan: PlanPt[], f: Frame, view: View, fovDeg: number): boolean {
   const ppu = pxPerUnit(f.position.z, fovDeg, view.h)
@@ -604,9 +604,11 @@ function reachesCorner(plan: PlanPt[], f: Frame, view: View, fovDeg: number): bo
   const cards = cardsOf(plan)
   const past = pastSlots(ppu)
   if (inCorner(sx(Math.min(...cards.map(p => p.x ?? 0))) - past.left, sy(Math.min(...cards.map(p => p.y ?? 0))) + past.bottom)) return true
+  // The lanes' box (planPoints gives its top-left and bottom-right as two bend points): its bottom-left.
+  const bends = plan.filter(p => p.bend)
+  if (bends.length > 0 && inCorner(sx(Math.min(...bends.map(p => p.x ?? 0))), sy(Math.min(...bends.map(p => p.y ?? 0))))) return true
   for (const p of plan) {
     const x = p.x ?? 0, y = p.y ?? 0
-    if (p.bend && inCorner(sx(x), sy(y))) return true
     if (!p.bend && (p.scale ?? 1) > 1) {
       const grown = pastSlots(ppu, p.scale)
       if (inCorner(sx(x - cardW / 2) - grown.left, sy(y - cardH / 2) + grown.bottom)) return true
@@ -671,7 +673,8 @@ function planFrameIn(plan: PlanPt[], view: View, fovDeg: number, insets: Insets)
   const fits = (ppu: number) => ppuOf(at(ppu)) >= ppu
   const slots = frameFor(nodes, view, fovDeg, { pad: FRAME.fitPad, maxZ: Infinity, ...insets })
   let hi = ppuOf(slots)
-  if (fits(hi)) return slots
+  // The zoom fits: the frame made for what the plan draws there, at that zoom, placed with the lanes counted.
+  if (fits(hi)) return at(hi)
   let lo = 0
   for (let i = 0; i < 40; i++) {
     const mid = (lo + hi) / 2
