@@ -48,7 +48,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:e2e": "npm run build && playwright test",
-    "prepack": "rm -rf dist lib && npm run build"
+    "prepare": "rm -rf dist lib && npm run build"
   },
   "dependencies": {
     "chokidar": "^5.0.0",

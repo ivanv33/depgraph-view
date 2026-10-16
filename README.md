@@ -13,6 +13,20 @@ depgraph-view garden
 
 Node 20.19 or newer. The command prints one line, the URL, and serves until you stop it (Ctrl-C).
 
+### Install from GitHub
+
+```sh
+npx github:ivanv33/depgraph-view#v0.1.0 garden
+```
+
+As a dependency in `package.json`:
+
+```json
+"depgraph-view": "github:ivanv33/depgraph-view#v0.1.0"
+```
+
+A git install builds the package from source, so it is slower than installing the npm package.
+
 ```
 depgraph-view <path> [--port N] [--open] [--no-watch]
 ```

@@ -28,4 +28,10 @@ describe('the published package', () => {
     const pkg = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'))
     expect([pkg.version, pkg.license, pkg.bin['depgraph-view'], pkg.engines.node]).toEqual(['0.1.0', 'MIT', 'bin/depgraph-view.js', '>=20.19'])
   })
+
+  it('builds on prepare, so an install from a git source gets lib/ and dist/', () => {
+    const { scripts } = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'))
+    expect(scripts.prepare).toBe('rm -rf dist lib && npm run build')
+    expect(scripts).not.toHaveProperty('prepack')
+  })
 })
