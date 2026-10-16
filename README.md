@@ -70,6 +70,7 @@ The first installs it into the current project; the second installs it for your 
 
 ```
 depgraph-view <path> [--port N] [--host ADDR] [--open] [--no-watch]
+depgraph-view validate <path> [--json]
 ```
 
 | Argument | Meaning |
@@ -90,6 +91,16 @@ On start the URL goes to stdout. With `--host 0.0.0.0` or `::`, stdout gets one 
 | `0` | The server started (and later stopped on SIGINT or SIGTERM), or `-h` / `--help` printed the usage. |
 | `1` | The server could not start: a plan file that is not YAML or that the rules refuse, a missing path, a folder with no plan file (or with several `.yaml` files and none named after the folder), an old JSON graph file (see [From graph.json](#from-graphjson)), a `--port` that is in use, or a `--host` that cannot be bound. The message is printed to stderr as `depgraph-view: <message>`. |
 | `2` | Usage error: no path, two paths, an unknown option, a bad `--port` value or a `--host` without a value. The usage is printed to stderr. |
+
+### validate
+
+`depgraph-view validate <path>` loads the plan once, with the same loader and the same messages as the server, and exits: it serves nothing, opens no browser and watches nothing. A refusal goes to stderr as `depgraph-view: <message>` and each warning as `warning: <message>`, the same lines the server prints at start. A plan that loads gets one summary line on stdout, such as `Vegetable garden: 3 steps, 2 links, no warnings` (or `..., 2 warnings`). With `--json`, stdout gets one JSON object instead, `{ "name", "steps", "links", "warnings": [...], "errors": [...] }` (`name` is `null` and `errors` holds the message when the plan is refused); stderr is the same. A folder named `validate` is still a path when written as `./validate`.
+
+| Code | When |
+| --- | --- |
+| `0` | The plan loads with no warnings. |
+| `1` | The plan loads, with warnings. |
+| `2` | The plan cannot be loaded (any refusal, a missing path, a folder with no plan file), or a usage error. |
 
 ## The plan file
 
