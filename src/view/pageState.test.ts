@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initialStep } from './pageState.js'
+import { initialSearch, initialStep } from './pageState.js'
 import type { Plan } from '../engine/schema.js'
 
 /** A fictional two-step plan. */
@@ -17,5 +17,11 @@ describe('initialStep', () => {
     expect(initialStep('?step=gone', plan)).toBeNull()
     expect(initialStep('?step=Bad%20Id', plan)).toBeNull()
     expect(initialStep('', plan)).toBeNull()
+  })
+  it('initialSearch drops an unknown step from the query and keeps a known one and other params', () => {
+    expect(initialSearch('?step=gone', plan)).toBe('')
+    expect(initialSearch('?x=1&step=gone', plan)).toBe('?x=1')
+    expect(initialSearch('?step=b&x=1', plan)).toBe('?step=b&x=1')
+    expect(initialSearch('', plan)).toBe('')
   })
 })

@@ -4,9 +4,9 @@ import Legend from './Legend.js'
 import Panel from './Panel.js'
 import Search from './Search.js'
 import Toolbar from './Toolbar.js'
-import { initialStep } from './pageState.js'
+import { initialSearch, initialStep } from './pageState.js'
 import { isTypingTarget } from './typing.js'
-import { useElementHeight, useElementWidth } from './hooks/useElementHeight.js'
+import { useElementEdge } from './hooks/useElementHeight.js'
 import { useGrouping } from './hooks/useGrouping.js'
 import { useLiveGraph } from './hooks/useLiveGraph.js'
 import { useToday } from './hooks/useToday.js'
@@ -25,6 +25,7 @@ export default function ViewerPage() {
   const [grouped, toggleGrouped] = useGrouping()
   const today = useToday()
   const [fitAll, setFitAll] = useState(0)
+  const [warningsOpen, setWarningsOpen] = useState(false)
   const toggleRef = useRef<HTMLButtonElement>(null)
   // The selection is read from the URL once, when the first graph arrives; until then the URL is left alone.
   const started = useRef(false)
@@ -35,6 +36,9 @@ export default function ViewerPage() {
     if (!started.current) {
       started.current = true
       setSelected(initialStep(location.search, plan))
+      // A `?step=` the plan does not have leaves the URL once (the selection effect only writes on a change).
+      const search = initialSearch(location.search, plan)
+      if (search !== location.search) history.replaceState(history.state, '', `${location.pathname}${search}${location.hash}`)
       return
     }
     // A reload that drops the selected step clears the selection.
@@ -60,11 +64,12 @@ export default function ViewerPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const toolbarHeight = useElementHeight('[data-testid="toolbar"]', true, 0)
-  const panelWidth = useElementWidth('[data-testid="panel"]', selected !== null, 0)
+  // How far the toolbar and the panel reach into the window, their gaps from its edges included.
+  const toolbarReach = useElementEdge('[data-testid="toolbar"]', 'top', true, 0)
+  const panelReach = useElementEdge('[data-testid="panel"]', 'right', selected !== null, 0)
   const insets = useMemo(
-    () => ({ top: toolbarHeight ?? 0, right: selected ? panelWidth ?? 0 : 0, bottom: 0, left: 0 }),
-    [toolbarHeight, panelWidth, selected],
+    () => ({ top: toolbarReach ?? 0, right: selected ? panelReach ?? 0 : 0, bottom: 0, left: 0 }),
+    [toolbarReach, panelReach, selected],
   )
 
   const onGlides = useCallback((glides: readonly GlideSummary[]) => {
@@ -129,13 +134,20 @@ export default function ViewerPage() {
           />
         </div>
       )}
-      {counts && <Legend counts={counts} held={held} />}
+      {counts && !(warningsOpen && warnings.length > 0) && <Legend counts={counts} held={held} />}
       {warnings.length > 0 && (
-        <details data-testid="warnings" className="glass fixed bottom-4 left-4 z-10 max-w-[min(36rem,calc(100vw-2rem))] rounded-lg px-3 py-1.5 text-xs text-amber-100/80">
+        // Opened, the list rises above the summary (which stays where it is) into the legend's corner, so the legend
+        // steps aside until it closes.
+        <details
+          data-testid="warnings"
+          className="glass fixed bottom-4 left-4 z-10 rounded-lg px-3 py-1.5 text-xs text-amber-100/80"
+          open={warningsOpen}
+          onToggle={e => setWarningsOpen(e.currentTarget.open)}
+        >
           <summary className="cursor-pointer select-none">
             {warnings.length} {warnings.length === 1 ? 'warning' : 'warnings'}
           </summary>
-          <ul className="mt-1 max-h-48 list-disc space-y-0.5 overflow-y-auto pl-4 font-mono">
+          <ul className="glass absolute bottom-full left-0 mb-2 max-h-48 w-max max-w-[min(36rem,calc(100vw-2rem))] list-disc space-y-0.5 overflow-y-auto rounded-lg py-2 pl-7 pr-3 font-mono">
             {warnings.map((w, i) => (
               <li key={i}>{w}</li>
             ))}

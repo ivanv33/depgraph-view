@@ -106,3 +106,18 @@ export function useElementBox(selector: string, active: boolean, delayMs = 150, 
 export function useElementCorner(selector: string, active: boolean, delayMs = 150): ElementCorner | null {
   return useMeasured(selector, active, delayMs, corner, sameCorner, true)
 }
+
+/** Which window edge an overlay hangs from, for useElementEdge. */
+export type WindowEdge = 'top' | 'right'
+
+const reachTop = (el: HTMLElement) => el.getBoundingClientRect().bottom
+const reachRight = (el: HTMLElement) => window.innerWidth - el.getBoundingClientRect().left
+
+/**
+ * How far into the window the element `selector` finds reaches from `edge`, in window px, its gap from that edge
+ * included: from the top, its bottom; from the right, the window's width less its left. Measured again when it or its
+ * parent changes size or the window resizes (see useMeasured); forgotten once inactive. For a host's insets.
+ */
+export function useElementEdge(selector: string, edge: WindowEdge, active: boolean, delayMs = 150): number | null {
+  return useMeasured(selector, active, delayMs, edge === 'top' ? reachTop : reachRight, sameNumber, true)
+}

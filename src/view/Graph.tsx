@@ -69,7 +69,8 @@ export interface GraphProps {
   today: string
   /**
    * Host chrome over the graph in CSS px; nothing inside Graph queries the host DOM. Insets and boxes are window px:
-   * the host lays the graph's root over the whole window from (0, 0), its chrome as overlays on top.
+   * the host lays the graph's root over the whole window from (0, 0), its chrome as overlays on top, and each inset is
+   * how far that chrome reaches in from its window edge (its gap from the edge included).
    */
   insets: Insets
   /** Bumped to frame the whole plan (the toolbar's fit button); the selection stays. */

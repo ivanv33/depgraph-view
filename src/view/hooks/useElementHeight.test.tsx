@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { useElementBox, useElementCorner, useElementHeight, useElementWidth } from './useElementHeight.js'
+import { useElementBox, useElementCorner, useElementEdge, useElementHeight, useElementWidth } from './useElementHeight.js'
 
 // jsdom has no layout and no ResizeObserver: a fake one that the test fires by hand, and heights set per element.
 const observers = new Set<FakeResizeObserver>()
@@ -225,5 +225,52 @@ describe('useElementBox', () => {
     at(384, 64, 784, 490)
     rerender({ v: 'open' })
     expect(result.current).toEqual({ left: 384, top: 64, right: 784, bottom: 490 })
+  })
+})
+
+describe('useElementEdge', () => {
+  const at = (el: HTMLElement, left: number, bottom: number) => {
+    el.getBoundingClientRect = () => ({ left, bottom }) as DOMRect
+  }
+
+  it('top is how far down the window the element reaches (its bottom), gap from the edge included', async () => {
+    const column = document.createElement('div')
+    const el = card(40)
+    at(el, 16, 56)
+    column.append(el)
+    document.body.append(column)
+    const { result } = renderHook(() => useElementEdge(SEL, 'top', true, 0))
+    expect(result.current).toBe(56)
+    // it wraps to two rows
+    at(el, 16, 96)
+    act(() => {
+      for (const o of observers) o.fire(el)
+    })
+    await flush()
+    expect(result.current).toBe(96)
+  })
+
+  it('right is how far in from the window\'s right edge the element reaches, again when the window resizes', async () => {
+    vi.stubGlobal('innerWidth', 1200)
+    const el = card(600)
+    at(el, 768, 600)
+    document.body.append(el)
+    const { result, rerender } = renderHook(({ on }) => useElementEdge(SEL, 'right', on, 0), { initialProps: { on: true } })
+    expect(result.current).toBe(432)
+    vi.stubGlobal('innerWidth', 1000)
+    at(el, 568, 600)
+    act(() => {
+      window.dispatchEvent(new Event('resize'))
+    })
+    await flush()
+    expect(result.current).toBe(432)
+    at(el, 600, 600)
+    act(() => {
+      window.dispatchEvent(new Event('resize'))
+    })
+    await flush()
+    expect(result.current).toBe(400)
+    rerender({ on: false })
+    expect(result.current, 'forgotten once inactive').toBeNull()
   })
 })
