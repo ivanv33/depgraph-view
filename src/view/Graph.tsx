@@ -10,6 +10,7 @@ import {
   fitPlan,
   FRAME,
   frameInsets,
+  framingInsets,
   planFitTracker,
   planPoints,
   previewPlan,
@@ -37,7 +38,7 @@ import { idleLink, shiftLinkStep, type ShiftLinkEvent, type ShiftLinkState } fro
 import type { Plan, Status } from '../engine/schema.js'
 import { chainOf, neighboursOf } from '../engine/chain.js'
 import ChainEdgeCues, { type CueScene } from './ChainEdgeCue.js'
-import type { CuePoint } from '../engine/edgeCue.js'
+import { cueAreaBottom, type CuePoint } from '../engine/edgeCue.js'
 import { edgeOpacity, linkRole, linkStyle } from '../engine/linkStyle.js'
 import { deckLabel, deckParent, deckView, edgeMenuIds } from '../engine/grouping.js'
 import { layoutInput } from '../engine/drawnInput.js'
@@ -59,7 +60,7 @@ import { refreshOverPlate } from '../engine/overPlate.js'
 import type { Box } from '../engine/titleFit.js'
 import { glideMeter, type GlideSummary } from '../engine/glideMeter.js'
 import { edgeMaterials } from '../engine/edgeMaterials.js'
-import { insetBoxes } from './insetBoxes.js'
+import { insetBoxes, type HostChrome } from './insetBoxes.js'
 
 export interface GraphProps {
   plan: Plan
@@ -106,6 +107,18 @@ export interface GraphProps {
   focusFallback?: () => HTMLElement | null
   /** Whether the host shows its legend in the bottom-left corner, so the frames keep its room clear (default true). */
   legend?: boolean
+  /**
+   * Strips of the window the host covers without wanting the cues kept clear of them (a sheet that rests beside the
+   * panel). Each frame Graph starts (a selection, a fit, a focus reveal) keeps them clear too, added to the insets;
+   * a change in them never frames again by itself.
+   */
+  passiveInsets?: Partial<Insets>
+  /**
+   * Boxes of the host's chrome in window px, for what insets cannot describe: its `chip` (a small box the cues keep
+   * clear of) and, to replace the ones derived from the insets, its `toolbar`, `panel` and `hud` (the bottom card:
+   * the edge cues' free area ends at its top). The cues and a deck's list keep clear of them.
+   */
+  chrome?: HostChrome
 }
 
 /** The time of the animation frame being drawn (every part of one frame shares it), for the glide meter. */
@@ -147,7 +160,7 @@ function glideEdge(
   obj.add(...next.children)
 }
 
-export default function Graph({ plan, selected: selectedId, onSelect, grouped: grouping, today, insets: given, fitAll, onGlides, focusFallback, legend = true, onShiftLink, onPick: hostPick, arming = false, onAddAt, onLinkContextMenu }: GraphProps) {
+export default function Graph({ plan, selected: selectedId, onSelect, grouped: grouping, today, insets: given, fitAll, onGlides, focusFallback, legend = true, passiveInsets, chrome, onShiftLink, onPick: hostPick, arming = false, onAddAt, onLinkContextMenu }: GraphProps) {
   // The host's insets, one object while their numbers hold (a host may pass a fresh object every render).
   const { top, right, bottom, left } = given
   const insets = useMemo<Insets>(() => ({ top, right, bottom, left }), [top, right, bottom, left])
@@ -163,6 +176,11 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   const glidesRef = useRef(onGlides)
   useEffect(() => {
     glidesRef.current = onGlides
+  })
+  // The host's passive strips, read by the camera moves this graph starts (framingInsets), never a reason to start one.
+  const passiveRef = useRef(passiveInsets)
+  useEffect(() => {
+    passiveRef.current = passiveInsets
   })
   // Labels are stacked left to right (stackLabels), not by distance to the camera.
   const [extraRenderers] = useState(() => {
@@ -870,7 +888,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       // Its circle as its label draws it (nodeLabel.ts sets --dot-r from the same DueView, SIZE.normal undated).
       const due = duesRef.current.get(focusId)
       const dot = { r: due?.radius ?? SIZE.normal, overdue: due?.overdue ?? false }
-      return { focus: { x: focus.x, y: -focus.y }, chain, insets, legend, dot, top: Math.max(FRAME.topInset, insets.top) }
+      return { focus: { x: focus.x, y: -focus.y }, chain, insets: framingInsets(insets, passiveRef.current), legend, dot, top: Math.max(FRAME.topInset, insets.top) }
     }
     frameSelection.current = () => {
       const now = { id: selectedId, right: insets.right, left: insets.left, bottom: insets.bottom, chain: chainKey, at: focusKey, view: viewKey }
@@ -921,12 +939,12 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   // titles' first measure (the plan's first drawn steps) is the load's frame, which waits for that measure (fitOnce).
   useEffect(() => {
     const later = dragging.current || !!resizing.current?.pending()
-    if (fitTracker.see({ selectedId, drawn: drawnIds }, later) && titlesMeasured.current && fitPlan(host, insets, legend)) userMoved.clear()
+    if (fitTracker.see({ selectedId, drawn: drawnIds }, later) && titlesMeasured.current && fitPlan(host, framingInsets(insets, passiveRef.current), legend)) userMoved.clear()
   }, [drawnIds, selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     fitAfterDrag.current = () => {
       if (resizing.current?.pending()) return
-      if (fitTracker.dragEnd() && fitPlan(host, insets, legend)) userMoved.clear()
+      if (fitTracker.dragEnd() && fitPlan(host, framingInsets(insets, passiveRef.current), legend)) userMoved.clear()
     }
   })
   // With nothing selected, a settled new view size fits the whole plan into it again, as the first load does (unless
@@ -940,17 +958,17 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     if (!engineStopped.current || !titlesMeasured.current || dragging.current) return
     // A whole-plan fit that waited for the resize (the selection closed, or the drawn steps changed) is the one frame.
     if (fitTracker.dragEnd()) {
-      if (fitPlan(host, insets, legend)) userMoved.clear()
+      if (fitPlan(host, framingInsets(insets, passiveRef.current), legend)) userMoved.clear()
       return
     }
     if (selectedId !== null || viewKey === before) return
-    if (shouldFrameResize({ userMoved: userMoved.moved(), hid: resizeHid() }, false) && fitPlan(host, insets, legend)) userMoved.clear()
+    if (shouldFrameResize({ userMoved: userMoved.moved(), hid: resizeHid() }, false) && fitPlan(host, framingInsets(insets, passiveRef.current), legend)) userMoved.clear()
   }, [settled]) // eslint-disable-line react-hooks/exhaustive-deps
   // Fit: the whole plan, whatever is selected (the selection and its panel stay). Only a press made while this
   // graph is mounted counts: a plan switch remounts it under the old count.
   useNewPress(fitAll, () => {
     userMoved.clear()
-    fitPlan(host, insets, legend)
+    fitPlan(host, framingInsets(insets, passiveRef.current), legend)
   })
   // Each deck is drawn as one node whose look comes from its members; a zoom step that lists as many keeps the same map.
   const deckViews = useDeckViews(plan, view, today, states, selectedId, deckWords, deckKeyAtRef)
@@ -1403,7 +1421,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     const camera = fg?.camera() as THREE.PerspectiveCamera | undefined
     if (!fg || !root || !camera || !(camera.position.z > 0)) return
     const { w, h } = sizeRef.current
-    const strips = frameInsets(sizeRef.current, insets, legend)
+    const strips = frameInsets(sizeRef.current, framingInsets(insets, passiveRef.current), legend)
     const area = { left: root.left + strips.left, top: root.top + strips.top, right: root.left + w - strips.right, bottom: root.top + h - strips.bottom }
     const target = (fg.controls() as unknown as { target: THREE.Vector3 }).target
     const at = {
@@ -1434,18 +1452,23 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   // insets (no layout read); the scene is where the chain's circles and every card are drawn now,
   // projected from the camera, read on the frame tick.
   const cueStrips = frameInsets(size, insets, legend)
+  // the host's bottom card, when it gives one: the area ends at its top (cueAreaBottom), not at an inset
+  const hudTop = chrome?.hud?.top
+  const hudBottom = chrome?.hud?.bottom
   const cueArea = useMemo(
     // the view less the host's insets (and the legend's strip), as a selection is framed in
     () => ({
       left: cueStrips.left,
       top: cueStrips.top,
       right: size.w - cueStrips.right,
-      bottom: size.h - cueStrips.bottom,
+      bottom: hudTop === undefined || hudBottom === undefined ? size.h - cueStrips.bottom : cueAreaBottom(cueStrips.top, hudTop, hudBottom),
     }),
-    [cueStrips.left, cueStrips.top, cueStrips.right, cueStrips.bottom, size.w, size.h],
+    [cueStrips.left, cueStrips.top, cueStrips.right, cueStrips.bottom, size.w, size.h, hudTop, hudBottom],
   )
-  // The host's toolbar and panel as boxes (insetBoxes), which the edge cues and a deck's list keep clear of.
-  const chrome = useMemo(() => insetBoxes(size, insets), [size, insets])
+  // The host's chrome as boxes (insetBoxes), which the edge cues and a deck's list keep clear of. Keyed by its numbers:
+  // a host may build `chrome` afresh each render, which must not reset the cues.
+  const chromeKey = JSON.stringify(chrome ?? {})
+  const boxes = useMemo(() => insetBoxes(size, insets, chrome), [size, insets, chromeKey]) // eslint-disable-line react-hooks/exhaustive-deps
   // What the graph library draws for a node and for a link. It builds every node's or every link's object again
   // whenever it is handed a new function for them, so each is a new function only when what it draws changes: a node's
   // card never (its label is kept in `labels` and redrawn by syncLabels), a link's when buildEdge is. So a node still
@@ -1577,7 +1600,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       onFocus={e => onFocusChange(e, true)}
       onBlur={e => onFocusChange(e, false)}
     >
-      <ChainEdgeCues active={selectedId !== null} area={cueArea} scene={cueScene} tickRef={cueTick} labels={labels} boxes={chrome} words={fitRuns} />
+      <ChainEdgeCues active={selectedId !== null} area={cueArea} scene={cueScene} tickRef={cueTick} labels={labels} boxes={boxes} words={fitRuns} />
       <ForceGraph3D<GraphNode, GraphLink>
         ref={fgRef}
         width={size.w}
@@ -1635,7 +1658,8 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
           rows={listRows}
           anchor={listAnchor}
           frameRef={listFrame}
-          around={chrome}
+          around={boxes}
+          legend={legend}
           linking={arming}
           onPick={id => {
             // The focus goes on to the step picked, once it is drawn (while arming the selection stays: so does the focus).

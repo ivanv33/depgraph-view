@@ -165,4 +165,42 @@ describe('DeckList place', () => {
       deck.remove()
     }
   })
+
+  it('reaches the bottom-left corner when the host hides the legend, and ends above the host bottom card', () => {
+    const deck = deckAt({ v: 10 })
+    const size = { w: window.innerWidth, h: window.innerHeight }
+    const setView = (w: number, h: number) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: w })
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: h })
+    }
+    const open = (around: { hud?: { left: number; top: number; right: number; bottom: number } }) =>
+      render(
+        <DeckList
+          deckId="deck:x"
+          title="1 step"
+          mix={[]}
+          rows={[row('a')]}
+          anchor={() => deck}
+          frameRef={{ current: null }}
+          around={around}
+          legend={false}
+          onPick={vi.fn()}
+          onClose={vi.fn()}
+          onFocusLost={vi.fn()}
+        />,
+      )
+    try {
+      // 1000 x 600, the Legend's room left to the graph: the list may reach the window's bottom margin, as at 600 px wide
+      setView(1000, 600)
+      open({})
+      expect(screen.getByTestId('deck-list').style.maxHeight).toBe('440px')
+      cleanup()
+      // a bottom card from y 400: the list ends 8 px above it, less its 8 px top margin
+      open({ hud: { left: 0, top: 400, right: 1000, bottom: 584 } })
+      expect(screen.getByTestId('deck-list').style.maxHeight).toBe('384px')
+    } finally {
+      setView(size.w, size.h)
+      deck.remove()
+    }
+  })
 })

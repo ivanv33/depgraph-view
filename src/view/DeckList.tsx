@@ -25,6 +25,8 @@ interface DeckListProps {
   around: { toolbar?: Box; panel?: Box; hud?: Box }
   /** A step is being picked to link to: the list says so, and offers no branch to open. */
   linking?: boolean
+  /** Whether the host shows its Legend in the bottom-left corner (default true): the list stays clear of it only then. */
+  legend?: boolean
   onPick: (id: string) => void
   /** Select the step the deck hangs from, which draws its whole branch (a branch deck only). */
   onOpenBranch?: () => void
@@ -69,7 +71,7 @@ const textColour = (s: NodeState) => (s === 'done' ? undefined : STATE_SWATCH[s]
  * `around`, nor the Legend) and scrolls when it is longer than that; the wheel over it scrolls it and never zooms
  * the graph.
  */
-export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, around, linking = false, onPick, onOpenBranch, onClose, onFocusLost }: DeckListProps) {
+export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, around, linking = false, legend = true, onPick, onOpenBranch, onClose, onFocusLost }: DeckListProps) {
   const box = useRef<HTMLDivElement>(null)
   const list = useRef<HTMLUListElement>(null)
   const close = useRef(onClose)
@@ -126,7 +128,7 @@ export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, a
       // As tall as all its rows: the rows' own height in place of the part of it shown now.
       const rowsEl = list.current
       const want = { w: LIST_SIZE.w, h: el.offsetHeight + (rowsEl ? rowsEl.scrollHeight - rowsEl.clientHeight : 0) }
-      const p = placeDeckList({ dot, text }, want, free, legendBox(view))
+      const p = placeDeckList({ dot, text }, want, free, legend ? legendBox(view) : [])
       return () => {
         el.style.left = `${p.left}px`
         el.style.top = `${p.top}px`

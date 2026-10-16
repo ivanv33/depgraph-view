@@ -16,4 +16,17 @@ describe('insetBoxes', () => {
       hud: { left: 0, top: 544, right: 390, bottom: 844 },
     })
   })
+
+  it('host chrome boxes win over the ones derived from the insets', () => {
+    const toolbar = { left: 0, top: 0, right: 1000, bottom: 90 }
+    const hud = { left: 16, top: 500, right: 600, bottom: 684 }
+    expect(insetBoxes({ w: 1000, h: 700 }, { top: 56, right: 400, bottom: 212, left: 0 }, { toolbar, hud })).toEqual({
+      toolbar, panel: { left: 600, top: 0, right: 1000, bottom: 700 }, hud,
+    })
+  })
+
+  it('passes the host chip through, which no inset describes', () => {
+    const chip = { left: 250, top: 76, right: 380, bottom: 104 }
+    expect(insetBoxes({ w: 1000, h: 700 }, { top: 0, right: 0, bottom: 0, left: 0 }, { chip })).toEqual({ chip })
+  })
 })

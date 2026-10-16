@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { CUE_INSET, OVERDUE_RING, cardBox, cueSize, dropGone, edgeCues, extentOf, placeCues, type CardAt, type Cover, type CuePoint, type EdgeCue } from '../engine/edgeCue.js'
 import { linkStyle } from '../engine/linkStyle.js'
-import type { Box } from '../engine/deckList.js'
+import type { HostChrome } from './insetBoxes.js'
 
 type Area = { left: number; top: number; right: number; bottom: number }
 /**
@@ -48,7 +48,7 @@ const colourOf = (kind: EdgeCue['kind']) => (kind === 'up' ? linkStyle('upstream
  * around its centre (its circle and words) is measured apart, once the view rests, for the cards near the edges. A
  * pill sits on its line unless a card's circle or words or the chrome is there: then it moves the least it can, along
  * its edge or just inside the host's panel lying on its place (placeCue). A marked step whose circle is hidden under
- * the host's toolbar or panel (`boxes`, from its insets) counts as past the edge too.
+ * the host's toolbar, panel, chip or bottom card (`boxes`) counts as past the edge too.
  */
 export default function ChainEdgeCues({
   active,
@@ -65,7 +65,7 @@ export default function ChainEdgeCues({
   tickRef: RefObject<(() => void) | null>
   labels: ReadonlyMap<string, HTMLElement>
   /** The host's chrome over the graph, in window px (insetBoxes): kept clear, and a step under it counts as past the edge. */
-  boxes: { toolbar?: Box; panel?: Box }
+  boxes: HostChrome
   /**
    * A count that changes whenever the cards' words may have changed with no view move (the graph's title fit ran: a
    * plan edit, a font swapped in, a title cut or shown): read on the frame tick, it asks for the cards to be measured
@@ -74,9 +74,9 @@ export default function ChainEdgeCues({
   words?: RefObject<number>
 }) {
   const [cues, setCues] = useState<EdgeCue[]>([])
-  // The host's toolbar and panel, where they lie over the graph, are kept clear too (given, not measured here).
-  const { toolbar, panel } = boxes
-  const inputs = useRef({ active, area, panel, toolbar })
+  // The host's chrome (toolbar, panel, chip, bottom card), where they lie over the graph, are kept clear too (given, not measured here).
+  const { toolbar, panel, chip, hud } = boxes
+  const inputs = useRef({ active, area, panel, toolbar, chip, hud })
   const lastScene = useRef('')
   const lastCues = useRef('')
   // What each card draws around its slot's centre, in card px (extentOf): measured once the view rests, for the cards
@@ -88,10 +88,10 @@ export default function ChainEdgeCues({
   const restKey = useRef('')
   const restTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => {
-    inputs.current = { active, area, panel, toolbar }
+    inputs.current = { active, area, panel, toolbar, chip, hud }
     lastScene.current = '' // read again on the next frame
     restKey.current = '' // and measured again once it rests: the area's edges, and so the cards near them, moved
-  }, [active, area, panel, toolbar])
+  }, [active, area, panel, toolbar, chip, hud])
   useEffect(() => {
     // read when the view has rested REST_MS, never on the frame tick: the page is laid out once for these reads
     const measureCards = () => {
@@ -115,7 +115,7 @@ export default function ChainEdgeCues({
     }
     let lastWords = words?.current
     tickRef.current = function edgeCueTick() {
-      const { active, area, panel, toolbar } = inputs.current
+      const { active, area, panel, toolbar, chip, hud } = inputs.current
       // words changed where nothing moved: measure again once they settle (a number read, no layout)
       if (words && words.current !== lastWords) {
         lastWords = words.current
@@ -133,7 +133,7 @@ export default function ChainEdgeCues({
         }
       }
       // a marked step whose circle is hidden under the chrome over the free area counts as past its edge (edgeCues)
-      const covers: Cover[] = [toolbar, panel].filter(b => b !== undefined)
+      const covers: Cover[] = [toolbar, panel, chip, hud && { ...hud, side: 'bottom' as const }].filter(b => b !== undefined)
       // the pill keeps clear of the cards as drawn, and is seen: moved along its edge or just inside a cover (placeCue);
       // never on the selected step nor on another pill (placeCues)
       const boxes = s ? s.cards.map(c => cardBox(c, extents.current.get(c.id))) : []

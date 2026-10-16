@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
 import { createRef, type RefObject } from 'react'
 import ChainEdgeCues, { drawnParts, type CueScene } from './ChainEdgeCue.js'
-import { OVERDUE_RING, cueSize } from '../engine/edgeCue.js'
+import { OVERDUE_RING, cueSize, type CuePoint } from '../engine/edgeCue.js'
+import type { HostChrome } from './insetBoxes.js'
 
 // jsdom has no layout and no ResizeObserver: a quiet one, and boxes set per element.
 class QuietResizeObserver {
@@ -93,5 +94,28 @@ describe('ChainEdgeCues', () => {
     act(() => vi.advanceTimersByTime(200))
     tick()
     expect(pillCentre(container), 'measured again: the pill is clear of the longer title').toBe(Math.round(290 + 4 + half))
+  })
+
+  /** The sides of the pills drawn for one marked step at `point`, with the host's chrome `boxes`. */
+  const cuesFor = (point: CuePoint, boxes: HostChrome) => {
+    const tickRef = createRef<(() => void) | null>() as RefObject<(() => void) | null>
+    const sceneRef = { current: () => ({ key: 'k', points: [point], cards: [] }) } as RefObject<() => CueScene | null>
+    const { container } = render(<ChainEdgeCues active area={area} scene={sceneRef} tickRef={tickRef} labels={new Map()} boxes={boxes} />)
+    act(() => tickRef.current?.())
+    return [...container.querySelectorAll('[data-testid="edge-cue"]')].map(c => c.getAttribute('data-side'))
+  }
+
+  it('counts a marked step under the host bottom card as past the bottom edge', () => {
+    const p = { x: 300, y: 450, kind: 'down' as const }
+    expect(cuesFor(p, {})).toEqual([])
+    cleanup()
+    expect(cuesFor(p, { hud: { left: 0, top: 400, right: 800, bottom: 500 } })).toEqual(['bottom'])
+  })
+
+  it('counts a marked step under the host chip as past the top edge', () => {
+    const p = { x: 300, y: 90, kind: 'up' as const }
+    expect(cuesFor(p, {})).toEqual([])
+    cleanup()
+    expect(cuesFor(p, { chip: { left: 250, top: 76, right: 380, bottom: 104 } })).toEqual(['top'])
   })
 })

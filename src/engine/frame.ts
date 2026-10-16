@@ -175,6 +175,18 @@ export const frameInsets = (view: View, host: Partial<Insets> = {}, legend = tru
 }
 
 /**
+ * The strips a camera move the graph starts frames into: the host's insets plus its passive strips (`passive`, the
+ * `passiveInsets` prop), field by field. The passive ones are for what covers the graph without being kept clear of
+ * by the cues, such as a sheet that rests beside the panel.
+ */
+export const framingInsets = (insets: Insets, passive?: Partial<Insets>): Insets => ({
+  top: insets.top + (passive?.top ?? 0),
+  right: insets.right + (passive?.right ?? 0),
+  bottom: insets.bottom + (passive?.bottom ?? 0),
+  left: insets.left + (passive?.left ?? 0),
+})
+
+/**
  * The bottom strip a selection keeps clear: the bottom card's real height (`hudHeight`, null when there is none) with
  * its distance from the bottom and a gap above it, never less than the default strip. A `folded` card (one line, see
  * cardFold.ts) is the thin strip it is, without that floor, so a frame gives the graph the room back.

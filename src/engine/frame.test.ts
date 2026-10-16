@@ -1,6 +1,6 @@
 // The host insets passed in these tests are the values the app's layout produced at each width.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bottomInsetFor, CHAIN_FRAME, SPARE_BACKOFF, chainFrame, doneForFrame, fitOnce, fitPlan, previewPlan, planFitStep, planFitTracker, planFrame, planPoints, frameFor, frameInsets, FRAME, selectionFrameStep, shouldFrameResize, shouldFrameSelection, sizeSettler, hidStep, flyStep, RESIZE_SETTLE_MS, insideArea, userMoveTracker, flyTakesFrame, selectionPoints, selectionFrame, previewSelection, selectedReach, flyX, flyY, flyAt, type Frame } from './frame.js'
+import { bottomInsetFor, CHAIN_FRAME, SPARE_BACKOFF, chainFrame, doneForFrame, fitOnce, fitPlan, previewPlan, planFitStep, planFitTracker, planFrame, planPoints, frameFor, frameInsets, framingInsets, FRAME, selectionFrameStep, shouldFrameResize, shouldFrameSelection, sizeSettler, hidStep, flyStep, RESIZE_SETTLE_MS, insideArea, userMoveTracker, flyTakesFrame, selectionPoints, selectionFrame, previewSelection, selectedReach, flyX, flyY, flyAt, type Frame } from './frame.js'
 import { distanceFor, LABEL_SCALE, labelScale, pxPerUnit } from './camera.js'
 import { layoutPlan, LAYOUT, type Layout } from './layered.js'
 import { NEAR, SIZE } from './due.js'
@@ -1888,5 +1888,16 @@ describe('frameInsets with host insets', () => {
   })
   it('drops the legend strip when legend is false', () => {
     expect(frameInsets(wide, {}, false).left).toBe(0)
+  })
+})
+
+describe('framingInsets', () => {
+  it('adds the passive strips to the host insets, side by side', () => {
+    expect(framingInsets({ top: 64, right: 120, bottom: 0, left: 0 }, { right: 400 })).toEqual({ top: 64, right: 520, bottom: 0, left: 0 })
+  })
+  it('is the host insets alone without passive strips', () => {
+    const insets = { top: 64, right: 0, bottom: 24, left: 300 }
+    expect(framingInsets(insets, undefined)).toEqual(insets)
+    expect(framingInsets(insets, {})).toEqual(insets)
   })
 })
