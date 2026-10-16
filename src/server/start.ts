@@ -31,12 +31,16 @@ const DEFAULT_DIST = fileURLToPath(new URL('../../dist/', import.meta.url))
  */
 export async function startServer(options: ServerOptions): Promise<RunningServer> {
   const source = staticSource(resolveGraphPath(options.path))
-  const wanted = options.port ?? (await findPort(DEFAULT_PORT))
   const server = createServer(createHandler(source, options.distDir ?? DEFAULT_DIST))
   try {
+    const wanted = options.port ?? (await findPort(DEFAULT_PORT))
     await new Promise<void>((resolve, reject) => {
-      server.once('error', (e: NodeJS.ErrnoException) => reject(e.code === 'EADDRINUSE' ? new PortInUseError(`port ${wanted} is in use`) : e))
-      server.listen(wanted, '127.0.0.1', resolve)
+      const onError = (e: NodeJS.ErrnoException) => reject(e.code === 'EADDRINUSE' ? new PortInUseError(`port ${wanted} is in use`) : e)
+      server.once('error', onError)
+      server.listen(wanted, '127.0.0.1', () => {
+        server.off('error', onError)
+        resolve()
+      })
     })
   } catch (e) {
     await source.close()

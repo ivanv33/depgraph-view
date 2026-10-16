@@ -74,6 +74,7 @@ describe('startServer', () => {
     const r = await fetch(`${server.url}files/a/page.html`)
     expect(r.headers.get('content-type')).toBe('text/plain; charset=utf-8')
     expect(r.headers.get('content-security-policy')).toContain('sandbox')
+    expect(r.headers.get('content-security-policy')).toBe("sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'")
     expect((await fetch(`${server.url}files/a/blob.bin`)).headers.get('content-type')).toBe('application/octet-stream')
   })
   it('has no write routes', async () => {
@@ -89,7 +90,9 @@ describe('startServer', () => {
     expect(asset.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
     expect((await fetch(`${server.url}viewer.css`)).headers.get('content-type')).toBe('text/css; charset=utf-8')
     expect((await fetch(server.url)).headers.get('cache-control')).toBe('no-cache')
-    expect((await fetch(`${server.url}api/graph`)).headers.get('cache-control')).toBe('no-store')
+    const graph = await fetch(`${server.url}api/graph`)
+    expect(graph.headers.get('cache-control')).toBe('no-store')
+    expect(graph.headers.get('content-type')).toBe('application/json; charset=utf-8')
     expect(await rawStatus(server.url, '/assets/../index.html')).toBe(404)
     const missing = await fetch(`${server.url}nope`)
     expect(missing.status).toBe(404)

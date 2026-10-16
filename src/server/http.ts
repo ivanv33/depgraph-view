@@ -72,7 +72,7 @@ function route(source: GraphSource, distDir: string, req: IncomingMessage, res: 
     const { result, generatedAt } = source.current()
     const { plan, resources, warnings, bodies } = result
     const json = JSON.stringify({ plan, resources, warnings, bodies, generatedAt })
-    return send(req, res, 200, { 'Content-Type': contentType('.json'), 'Cache-Control': 'no-store' }, json)
+    return send(req, res, 200, { 'Content-Type': contentType('graph.json'), 'Cache-Control': 'no-store' }, json)
   }
   const [, head, ...rest] = rawPath.split('/')
   if (head === 'assets' && rest.length > 0) {
