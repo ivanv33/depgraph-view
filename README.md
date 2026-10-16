@@ -7,7 +7,7 @@ A read-only 3D viewer for dependency graphs. Point it at a plan YAML file that l
 ## Quick start
 
 ```sh
-npx github:ivanv33/depgraph-view#v0.2.0 garden
+npx github:ivanv33/depgraph-view#v0.2.1 garden
 ```
 
 `garden` is a folder holding the plan file `garden.yaml` (see [The plan file](#the-plan-file)). This runs the viewer straight from GitHub. A git install builds from source, so the first run takes a minute.
@@ -44,13 +44,13 @@ npx https://github.com/ivanv33/depgraph-view garden
 To pin a release, add its tag:
 
 ```sh
-npx github:ivanv33/depgraph-view#v0.2.0 garden
+npx github:ivanv33/depgraph-view#v0.2.1 garden
 ```
 
 As a dependency in `package.json`:
 
 ```json
-"depgraph-view": "github:ivanv33/depgraph-view#v0.2.0"
+"depgraph-view": "github:ivanv33/depgraph-view#v0.2.1"
 ```
 
 A git install builds the package from source, so it is slower than installing the npm package.
