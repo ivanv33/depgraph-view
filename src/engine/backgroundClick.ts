@@ -15,3 +15,8 @@ export function backgroundAction({ shift, arming, linking, onText, detail = 1 }:
   if (shift && !arming) return 'add'
   return 'deselect'
 }
+
+/** What the host's props leave of an action: `add` needs `onAddAt`, and without it the click only deselects. */
+export function backgroundEffect(action: BackgroundAction, has: { addAt: boolean }): BackgroundAction {
+  return action === 'add' && !has.addAt ? 'deselect' : action
+}

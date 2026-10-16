@@ -30,6 +30,14 @@ export interface DeckView {
 export const deckParent = (id: string): string | null => (id.startsWith(DECK_PREFIX) ? id.slice(DECK_PREFIX.length) : null)
 
 /**
+ * The dependency and the dependent of a drawn edge, for a menu on it: an edge to or from a deck stands for several
+ * dependencies, so there is nothing to name (null).
+ */
+export function edgeMenuIds(source: string, target: string): [dependencyId: string, dependentId: string] | null {
+  return deckParent(source) !== null || deckParent(target) !== null ? null : [source, target]
+}
+
+/**
  * The nodes drawn individually (or, for a finished part, folded into a done deck).
  * With a selection: every path from a root down to it, its whole subtree, and every other root. Another root stays
  * drawn alone, its needs folding into its branch decks; when it is finished (done, with everything under it done),

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Plan, PlanNode } from './schema.js'
 import { chainOf } from './chain.js'
 import { nodeStates } from './readiness.js'
-import { DECK_LIST_MAX, DECK_PREFIX, deckLabel, deckParent, deckView, openSet } from './grouping.js'
+import { DECK_LIST_MAX, DECK_PREFIX, deckLabel, deckParent, edgeMenuIds, deckView, openSet } from './grouping.js'
 import { CROSS_AREAS, CROSS_GOAL, crossLinkedPlan } from './fixtures/crossLinked.js'
 import { drawnLayout } from './drawnLayout.js'
 
@@ -1046,5 +1046,15 @@ describe('a cross-linked plan (one goal, four areas, 48 features, many needed by
       const first = byOpen.get(openKey(sel))!
       for (const id of shared) expect(a.get(id), `${sel} (reversed): ${id}`).toBe(first.get(id))
     }
+  })
+})
+
+describe('edgeMenuIds', () => {
+  it('names the dependency and the dependent of an edge between two steps', () => {
+    expect(edgeMenuIds('buy-boards', 'build-bed')).toEqual(['buy-boards', 'build-bed'])
+  })
+  it('reports nothing for an edge to or from a deck', () => {
+    expect(edgeMenuIds('deck:build-bed', 'build-bed')).toBeNull()
+    expect(edgeMenuIds('sow-beans', 'deck:sow-beans')).toBeNull()
   })
 })

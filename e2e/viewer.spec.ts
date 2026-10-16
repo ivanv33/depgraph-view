@@ -102,3 +102,16 @@ test('shift+click on a label is a plain pick without onShiftLink', async ({ page
   await expect(page).toHaveURL(/\?step=water-rota$/)
   await page.keyboard.up('Shift')
 })
+
+test('shift+click on empty canvas deselects without onAddAt', async ({ page }) => {
+  await page.goto(`${url}?step=water-rota`)
+  await expect(label(page, 'water-rota')).toHaveAttribute('data-selected', 'true')
+  await waitForStill(page)
+  const h = page.viewportSize()!.height
+  await page.keyboard.down('Shift')
+  await page.mouse.click(10, Math.round(h / 2)) // left of the legend's strip, under the toolbar: empty canvas
+  await page.keyboard.up('Shift')
+  await expect(page.locator('[data-testid="node-label"][data-selected="true"]')).toHaveCount(0)
+  await expect(page).not.toHaveURL(/\?step=/)
+  await expect(page.getByTestId('node-label')).toHaveCount(6)
+})

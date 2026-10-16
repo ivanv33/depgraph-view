@@ -23,6 +23,8 @@ interface DeckListProps {
   frameRef: RefObject<DeckListFrame | null>
   /** The host's chrome over the graph, in window px (insetBoxes): the list stays clear of it. */
   around: { toolbar?: Box; panel?: Box }
+  /** A step is being picked to link to: the list says so, and offers no branch to open. */
+  linking?: boolean
   onPick: (id: string) => void
   /** Select the step the deck hangs from, which draws its whole branch (a branch deck only). */
   onOpenBranch?: () => void
@@ -67,7 +69,7 @@ const textColour = (s: NodeState) => (s === 'done' ? undefined : STATE_SWATCH[s]
  * `around`, nor the Legend) and scrolls when it is longer than that; the wheel over it scrolls it and never zooms
  * the graph.
  */
-export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, around, onPick, onOpenBranch, onClose, onFocusLost }: DeckListProps) {
+export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, around, linking = false, onPick, onOpenBranch, onClose, onFocusLost }: DeckListProps) {
   const box = useRef<HTMLDivElement>(null)
   const list = useRef<HTMLUListElement>(null)
   const close = useRef(onClose)
@@ -230,6 +232,7 @@ export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, a
           ✕
         </button>
       </div>
+      {linking && <p className="deck-list-hint">Pick the step to link to.</p>}
       <ul ref={list} className="deck-list-rows">
         {rows.map(r => (
           <li key={r.id}>
@@ -260,7 +263,7 @@ export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, a
           </li>
         ))}
       </ul>
-      {onOpenBranch && (
+      {onOpenBranch && !linking && (
         <button type="button" data-testid="deck-list-open-branch" className="deck-list-open" onClick={onOpenBranch}>
           Draw the whole branch
         </button>

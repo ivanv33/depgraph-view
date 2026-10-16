@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { backgroundAction } from './backgroundClick.js'
+import { backgroundAction, backgroundEffect } from './backgroundClick.js'
 
 describe('backgroundAction', () => {
   it.each([
@@ -35,5 +35,15 @@ describe('backgroundAction', () => {
     [{ shift: false, arming: false, linking: false, onText: true, detail: 1 }, 'selected'],
   ] as const)('%o -> %s', (input, want) => {
     expect(backgroundAction(input)).toBe(want)
+  })
+})
+
+describe('backgroundEffect', () => {
+  it('add falls back to deselect without onAddAt', () => {
+    expect(backgroundEffect('add', { addAt: false })).toBe('deselect')
+    expect(backgroundEffect('add', { addAt: true })).toBe('add')
+  })
+  it.each(['selected', 'deselect', 'cancelLink', 'ignore'] as const)('passes %s through', a => {
+    expect(backgroundEffect(a, { addAt: false })).toBe(a)
   })
 })

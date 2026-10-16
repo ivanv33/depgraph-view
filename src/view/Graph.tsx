@@ -30,7 +30,7 @@ import {
 import { panToReveal } from '../engine/reveal.js'
 import { burstFrame, prefersReducedMotion, takeNewlyDone } from '../engine/effects.js'
 import { placeNodes, structureKey, toGraphData, type GraphLink, type GraphNode } from '../engine/graphData.js'
-import { backgroundAction } from '../engine/backgroundClick.js'
+import { backgroundAction, backgroundEffect } from '../engine/backgroundClick.js'
 import { DOT, labelFor, onSelectedText, pickModeOf, shakeLabel, stackLabels, syncLabels, type LabelNode, type PickMode } from '../engine/nodeLabel.js'
 import { shiftHeld } from '../engine/shiftHeld.js'
 import { idleLink, shiftLinkStep, type ShiftLinkEvent, type ShiftLinkState } from '../engine/shiftLink.js'
@@ -39,7 +39,7 @@ import { chainOf, neighboursOf } from '../engine/chain.js'
 import ChainEdgeCues, { type CueScene } from './ChainEdgeCue.js'
 import type { CuePoint } from '../engine/edgeCue.js'
 import { edgeOpacity, linkRole, linkStyle } from '../engine/linkStyle.js'
-import { deckLabel, deckParent, deckView } from '../engine/grouping.js'
+import { deckLabel, deckParent, deckView, edgeMenuIds } from '../engine/grouping.js'
 import { layoutInput } from '../engine/drawnInput.js'
 import { focusSoon as focusAfterDraw } from './focusSoon.js'
 import { TWEEN_MS, originOf, tween, tweenEdge } from '../engine/tween.js'
@@ -65,6 +65,24 @@ export interface GraphProps {
   plan: Plan
   selected: string | null
   onSelect: (id: string | null) => void
+  /**
+   * Given, every step pick (a label, a deck's row, a deck's open-branch button, the selected step's own text) calls it
+   * instead of `onSelect(id)`; a deselect still calls `onSelect(null)`. `mode` says how the press was made: Meta is
+   * `'link'`, Ctrl or the context menu `'edit'`. Shift never reaches it: with `onShiftLink` it links, else it is a plain pick.
+   */
+  onPick?: (id: string, mode?: PickMode) => void
+  /**
+   * The host is waiting for the step to link to (its own link mode): a Shift pick is then a plain pick, a click on a
+   * done deck only shakes it, the deck list says to pick a step and its rows move no focus, and the cursor is a crosshair.
+   */
+  arming?: boolean
+  /** Given, Shift+click on empty canvas calls it with the click's window point; absent, that click deselects. */
+  onAddAt?: (x: number, y: number) => void
+  /**
+   * Given, a right click on a dependency line calls it with the step that is needed and the step that needs it; a line to
+   * or from a deck stands for several dependencies and calls nothing.
+   */
+  onLinkContextMenu?: (dependencyId: string, dependentId: string) => void
   /**
    * Given, Shift+click on a step and then on another links them: called with the step the first click was on and the one
    * the second was on. Absent, Shift+click is a plain pick and nothing of the linking runs.
@@ -127,7 +145,7 @@ function glideEdge(
   obj.add(...next.children)
 }
 
-export default function Graph({ plan, selected: selectedId, onSelect, grouped: grouping, today, insets: given, fitAll, onGlides, focusFallback, onShiftLink }: GraphProps) {
+export default function Graph({ plan, selected: selectedId, onSelect, grouped: grouping, today, insets: given, fitAll, onGlides, focusFallback, onShiftLink, onPick: hostPick, arming = false, onAddAt, onLinkContextMenu }: GraphProps) {
   // The host's insets, one object while their numbers hold (a host may pass a fresh object every render).
   const { top, right, bottom, left } = given
   const insets = useMemo<Insets>(() => ({ top, right, bottom, left }), [top, right, bottom, left])
@@ -216,12 +234,14 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     deckWordsShown.current = now
     setDeckWords(now)
   }, [])
-  const pick = useRef(onSelect)
+  const pick = useRef<(id: string, mode?: PickMode) => void>(hostPick ?? (id => onSelect(id)))
 
   const fallbackRef = useRef(focusFallback)
   const shiftLinkRef = useRef(onShiftLink)
+  const armingRef = useRef(arming)
   useEffect(() => {
-    pick.current = onSelect
+    pick.current = hostPick ?? (id => onSelect(id))
+    armingRef.current = arming
     fallbackRef.current = focusFallback
     shiftLinkRef.current = onShiftLink
   })
@@ -265,6 +285,10 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     },
     [labels],
   )
+  // A link left pending when `onShiftLink` goes away has no one to end it: cancel it with the arrow and crosshair.
+  useEffect(() => {
+    if (!shiftLinking && linkState.current.from !== null) stepLink({ type: 'cancel' })
+  }, [shiftLinking, stepLink])
   // Done decks opened by a click, under the selection they were opened for: any other selection folds them again.
   const [openedDone, setOpenedDone] = useState<{ sel: string | null; ids: ReadonlySet<string> }>({ sel: null, ids: NO_IDS })
   // A selection that moves on (Escape, another step) drops them, so coming back to the step finds them folded.
@@ -309,12 +333,18 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   // click opens it where it is, its steps drawn one by one, and the selection stays.
   const onPick = useCallback((id: string, mode?: PickMode) => {
     const parent = deckParent(id)
-    // Shift links two steps, only when the host takes links: else it is a plain pick. Any other pick ends a pending
-    // Shift+click link and goes on as ever.
-    if (mode === 'shift' && shiftLinkRef.current) return stepLink({ type: 'shiftPick', id, deck: parent !== null })
+    // Shift links two steps, only when the host takes links and is not itself waiting for a step to link to (arming):
+    // else it is a plain pick. Any other pick ends a pending Shift+click link and goes on as ever.
+    if (mode === 'shift' && shiftLinkRef.current && !armingRef.current) return stepLink({ type: 'shiftPick', id, deck: parent !== null })
     if (mode === 'shift') mode = undefined
     stepLink({ type: 'plainPick' })
     if (parent && doneDecks.current.ids.has(id)) {
+      // While the host is arming a deck is no step to link to: a done deck only shakes.
+      if (armingRef.current) {
+        const el = labels.get(id)
+        if (el) shakeLabel(el)
+        return
+      }
       const sel = doneDecks.current.sel
       setOpenedDone(prev => ({ sel, ids: new Set([...(prev.sel === sel ? prev.ids : []), id]) }))
     } else if (parent) {
@@ -329,7 +359,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
         listExit.current = false
         setListed({ id, sel })
       }
-    } else pick.current(id)
+    } else pick.current(id, mode)
   }, [labels])
   // Focus a step's label once it is drawn (a newly selected step is drawn a frame or two later): the first of `ids`
   // drawn, else the host's fallback (focusFallback), so the focus never falls to the page; never over a focus the user
@@ -374,7 +404,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     if (!openedAny) return
     const onKey = (e: KeyboardEvent) => {
       // An open list takes this Escape (it closes the list, one level at a time): it is not this one's.
-      if (e.key !== 'Escape' || e.defaultPrevented || listedRef.current || isTypingTarget(e.target)) return
+      if (e.key !== 'Escape' || e.defaultPrevented || listedRef.current || armingRef.current || linkState.current.from !== null || isTypingTarget(e.target)) return
       // Only an Escape on the page itself or inside this graph is the graph's: the host's own controls keep theirs.
       if (e.target instanceof Element && e.target !== document.body && !rootRef.current?.contains(e.target)) return
       e.preventDefault()
@@ -1072,10 +1102,14 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       return
     }
     const onText = selectedId !== null && onSelectedText(labels, selectedId, e.clientX, e.clientY)
-    const action = backgroundAction({ shift: e.shiftKey, arming: false, linking: linkState.current.from !== null, onText, detail: Math.max(e.detail, pressDetail.current) })
+    const action = backgroundEffect(
+      backgroundAction({ shift: e.shiftKey, arming, linking: linkState.current.from !== null, onText, detail: Math.max(e.detail, pressDetail.current) }),
+      { addAt: onAddAt !== undefined },
+    )
     if (action === 'ignore') return
     if (action === 'cancelLink') stepLink({ type: 'cancel' })
-    // anything else but a click on the selected step's text deselects ('add' included: the viewer adds nothing)
+    else if (action === 'add') onAddAt?.(e.clientX, e.clientY)
+    // anything else but a click on the selected step's text deselects ('add' without onAddAt included)
     else if (action !== 'selected' || selectedId === null) onSelect(null)
     // a click on the selected step's text is one on that step (never a deck)
     else onPick(selectedId, pickModeOf(e))
@@ -1530,8 +1564,9 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       data-testid="graph"
       data-still="false"
       className="isolate"
+      data-arming={arming}
       data-shift={onShiftLink ? shiftDown : undefined}
-      style={{ cursor: linkFrom !== null || shiftDown ? 'crosshair' : 'default' }}
+      style={{ cursor: arming || linkFrom !== null || shiftDown ? 'crosshair' : 'default' }}
       onPointerOver={onPointerOver}
       onPointerLeave={() => {
         setHoveredId(null)
@@ -1562,6 +1597,22 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
         onBackgroundClick={onEmptyCanvasClick}
         // A dependency line is empty canvas for a click: the library sends one on a line to this prop, not the one above.
         onLinkClick={(_l: GraphLink, e: MouseEvent) => onEmptyCanvasClick(e)}
+        // A right click on the selected step's own text is a context-menu pick of that step (only for a host that takes picks).
+        onBackgroundRightClick={
+          hostPick
+            ? (e: MouseEvent) => {
+                if (selectedId !== null && onSelectedText(labels, selectedId, e.clientX, e.clientY)) hostPick(selectedId, pickModeOf(e, true))
+              }
+            : undefined
+        }
+        onLinkRightClick={
+          onLinkContextMenu
+            ? (l: GraphLink) => {
+                const ids = edgeMenuIds(idOf(l.source), idOf(l.target))
+                if (ids) onLinkContextMenu(ids[0], ids[1])
+              }
+            : undefined
+        }
       />
       {linkFrom !== null && (
         <svg data-testid="link-arrow" aria-hidden="true" className="pointer-events-none fixed inset-0 h-full w-full">
@@ -1583,10 +1634,13 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
           anchor={listAnchor}
           frameRef={listFrame}
           around={chrome}
+          linking={arming}
           onPick={id => {
-            // The focus goes on to the step picked, once it is drawn.
-            listExit.current = true
-            focusSoon([id])
+            // The focus goes on to the step picked, once it is drawn (while arming the selection stays: so does the focus).
+            if (!arming) {
+              listExit.current = true
+              focusSoon([id])
+            }
             stepLink({ type: 'plainPick' })
             pick.current(id)
           }}

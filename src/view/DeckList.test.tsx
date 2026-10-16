@@ -52,6 +52,29 @@ describe('DeckList rows', () => {
   })
 })
 
+describe('DeckList linking', () => {
+  const props = {
+    deckId: 'deck:x',
+    title: '2 steps',
+    mix: [],
+    rows: [row('a'), row('b')],
+    anchor: () => undefined,
+    frameRef: { current: null },
+    around: {},
+    onPick: vi.fn(),
+    onClose: vi.fn(),
+    onFocusLost: vi.fn(),
+  }
+  it('while linking, says to pick the step to link to and offers no branch to open', () => {
+    const { rerender } = render(<DeckList {...props} onOpenBranch={vi.fn()} />)
+    expect(screen.queryByText('Pick the step to link to.')).toBeNull()
+    expect(screen.getByTestId('deck-list-open-branch')).toBeTruthy()
+    rerender(<DeckList {...props} onOpenBranch={vi.fn()} linking />)
+    expect(screen.getByText('Pick the step to link to.').className).toBe('deck-list-hint')
+    expect(screen.queryByTestId('deck-list-open-branch')).toBeNull()
+  })
+})
+
 describe('DeckList place', () => {
   /** A deck label drawn with its circle and text at `x` (px from the left), whatever is asked. */
   const deckAt = (x: { v: number }) => {
