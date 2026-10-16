@@ -8,7 +8,13 @@ type SourceFile = { path: string; text: string }
 const FROM_RE = /\b(?:import|export)\b[^'";]*?\bfrom\s*['"]([^'"]+)['"]/g
 const BARE_RE = /\bimport\s*['"]([^'"]+)['"]/g
 const DYNAMIC_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g
-const ENGINE_FORBIDDEN_TEXT = ['process.', 'Buffer', '__dirname', 'require(']
+/** Node globals engine source must not name. `Buffer` and `require(` match as whole words, so three.js names such as BufferGeometry pass. */
+const ENGINE_FORBIDDEN_TEXT: [string, (text: string) => boolean][] = [
+  ['process.', (t) => t.includes('process.')],
+  ['Buffer', (t) => /\bBuffer\b/.test(t)],
+  ['__dirname', (t) => t.includes('__dirname')],
+  ['require(', (t) => /\brequire\(/.test(t)],
+]
 
 /** Every module specifier a file names in an import, re-export, side-effect import or dynamic import. */
 function specifiers(text: string): string[] {
@@ -57,7 +63,7 @@ export function violations(files: SourceFile[]): string[] {
       }
     }
     if (layer === 'engine' && !test) {
-      for (const token of ENGINE_FORBIDDEN_TEXT) if (text.includes(token)) flag(`engine uses ${token}`)
+      for (const [token, uses] of ENGINE_FORBIDDEN_TEXT) if (uses(text)) flag(`engine uses ${token}`)
     }
     if (layer === 'view' && text.includes('__depgraph')) flag('view uses __depgraph')
   }
@@ -80,6 +86,11 @@ describe('import boundaries', () => {
   it('flags Node globals in engine source but not in engine tests', () => {
     expect(violations([{ path: 'src/engine/a.ts', text: "import { readFileSync } from 'node:fs'" }])).toHaveLength(1)
     expect(violations([{ path: 'src/engine/a.test.ts', text: "import { readFileSync } from 'node:fs'" }])).toEqual([])
+  })
+  it('flags Buffer and require( as whole words only, so three.js names such as BufferGeometry pass', () => {
+    expect(violations([{ path: 'src/engine/a.ts', text: 'const b = Buffer.from(x)' }])).toEqual(['src/engine/a.ts: engine uses Buffer'])
+    expect(violations([{ path: 'src/engine/a.ts', text: "const f = require('fs')" }])).toEqual(['src/engine/a.ts: engine uses require('])
+    expect(violations([{ path: 'src/engine/a.ts', text: 'const g = new THREE.BufferGeometry(); const a = THREE.Float32BufferAttribute' }])).toEqual([])
   })
   it('lets server import engine/schema only', () => {
     expect(violations([{ path: 'src/server/l.ts', text: "import { ID_RE } from '../engine/schema.js'" }])).toEqual([])
