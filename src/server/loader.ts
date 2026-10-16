@@ -75,7 +75,7 @@ export function loadGraph(rootDir: string, json: unknown): LoadResult {
   try {
     realRoot = realpathSync(root)
   } catch {
-    throw new GraphError(`folder not found: ${rootDir}`)
+    throw new GraphError(`folder not found: ${path.basename(rootDir)}`)
   }
   const out: LoadResult = { plan: { name, nodes: [] }, resources: {}, bodies: {}, folders: {}, mdFiles: {}, warnings: [] }
   const warn = (id: string, text: string) => out.warnings.push(`node "${id}": ${text}`)
@@ -148,7 +148,9 @@ export function loadGraphFile(jsonPath: string): LoadResult {
     const text = readFileSync(jsonPath, 'utf8')
     json = JSON.parse(text.startsWith('﻿') ? text.slice(1) : text)
   } catch (e) {
-    throw new GraphError(`${base}: ${e instanceof Error ? e.message : String(e)}`)
+    // Only a parse error's own text: I/O messages carry absolute paths, and these reach the page.
+    if (e instanceof SyntaxError) throw new GraphError(`${base}: ${e.message}`)
+    throw new GraphError(`${base}: cannot be read (${(e as NodeJS.ErrnoException).code ?? 'error'})`)
   }
   return loadGraph(path.dirname(jsonPath), json)
 }

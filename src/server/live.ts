@@ -1,4 +1,5 @@
 import { watch } from 'chokidar'
+import path from 'node:path'
 import { GraphError, loadGraphFile, type LoadResult } from './loader.js'
 
 /** One loaded graph and when it was read. */
@@ -30,6 +31,12 @@ function pageMessage(e: unknown, what: string): string {
   return `could not ${what}${typeof code === 'string' ? ` (${code})` : ''}`
 }
 
+/** Whether `p` lies strictly under the folder `dir`. */
+function inside(dir: string, p: string): boolean {
+  const rel = path.relative(dir, p)
+  return rel !== '' && !rel.startsWith(`..${path.sep}`) && rel !== '..' && !path.isAbsolute(rel)
+}
+
 /** A source that follows its files; `ready` resolves once the watcher is live. */
 export interface WatchedSource extends GraphSource {
   ready(): Promise<void>
@@ -58,38 +65,51 @@ export function watchedSource(jsonPath: string, debounceMs = 150): WatchedSource
 
   const watcher = watch([...watched], { ignoreInitial: true, followSymlinks: false })
   let live = false
-  const ready = new Promise<void>(resolve => watcher.once('ready', () => {
-    live = true
-    resolve()
-  }))
 
-  const reload = () => {
+  /** Reads the graph again; `announce` sends the outcome to listeners, otherwise a failure is dropped. */
+  const reload = (announce: boolean) => {
     timer = undefined
     if (closed) return
     let result: LoadResult
     try {
       result = loadGraphFile(jsonPath)
     } catch (e) {
-      return emit({ type: 'error', message: pageMessage(e, 'reload the graph') })
+      if (announce) emit({ type: 'error', message: pageMessage(e, 'reload the graph') })
+      return
     }
     snapshot = { result, generatedAt: new Date().toISOString() }
     const next = watchList(jsonPath, result)
-    const gone = [...watched].filter(p => !next.has(p))
+    // Unwatching a path under a folder that is still watched would make chokidar ignore that subtree.
+    const gone = [...watched].filter(p => !next.has(p) && ![...next].some(k => inside(k, p)))
     const added = [...next].filter(p => !watched.has(p))
     if (gone.length) watcher.unwatch(gone)
     if (added.length) watcher.add(added)
     watched = next
-    emit({ type: 'reload', generatedAt: snapshot.generatedAt })
+    if (announce) emit({ type: 'reload', generatedAt: snapshot.generatedAt })
   }
+
+  // Settles on chokidar's `ready`, after a silent reload that catches edits made while the watch started;
+  // rejects when chokidar fails first, so a caller awaiting it cannot hang.
+  const ready = new Promise<void>((resolve, reject) => {
+    watcher.once('ready', () => {
+      reload(false)
+      live = true
+      resolve()
+    })
+    watcher.on('error', e => {
+      if (!live) reject(e)
+    })
+  })
+  ready.catch(() => {}) // a caller that never awaits `ready()` must not see an unhandled rejection
 
   // Before `ready`, chokidar reports a symlink in a watched folder as `add` despite ignoreInitial.
   watcher.on('all', () => {
     if (closed || !live) return
     clearTimeout(timer)
-    timer = setTimeout(reload, debounceMs)
+    timer = setTimeout(() => reload(true), debounceMs)
   })
   watcher.on('error', e => {
-    if (!closed) emit({ type: 'error', message: pageMessage(e, 'watch the graph files') })
+    if (!closed && live) emit({ type: 'error', message: pageMessage(e, 'watch the graph files') })
   })
 
   return {

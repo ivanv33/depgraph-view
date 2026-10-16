@@ -145,4 +145,12 @@ describe('loadGraphFile', () => {
     expect(() => loadGraphFile(join(root, 'plan.json'))).toThrow(/^plan\.json: /)
     expect(() => loadGraphFile(join(root, 'plan.json'))).toThrow(GraphError)
   })
+  it('names an unreadable file by its base name and error code only', () => {
+    const root = makeFolder({})
+    expect(() => loadGraphFile(join(root, 'plan.json'))).toThrow(new GraphError('plan.json: cannot be read (ENOENT)'))
+  })
+  it('names a missing folder by its base name only', () => {
+    const root = makeFolder({})
+    expect(() => loadGraph(join(root, 'gone'), { name: 'G', nodes: [] })).toThrow(new GraphError('folder not found: gone'))
+  })
 })
