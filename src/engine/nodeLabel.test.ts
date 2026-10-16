@@ -324,7 +324,7 @@ describe('priority on a label', () => {
 })
 
 describe('the stylesheet', () => {
-  const css = readFileSync(resolve(process.cwd(), 'src/view/viewer.css'), 'utf8')
+  const css = readFileSync(resolve(process.cwd(), 'src/view/labels.css'), 'utf8')
   const rules = css.split('}')
 
   it('has no other priority signal: no glow, no bold or brighter title, no muting', () => {

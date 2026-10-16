@@ -1,0 +1,47 @@
+/* A deck's steps listed in place (DeckList): a small panel beside the deck, kept inside the free part of the window
+   and above the labels; its rows scroll, and the wheel over it scrolls them instead of zooming the graph. */
+.deck-list {
+  position: fixed;
+  z-index: 2147483600;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #c3cad6;
+  overflow: hidden;
+}
+.deck-list-head { display: flex; align-items: baseline; gap: 8px; padding: 8px 8px 6px 12px; border-bottom: 1px solid rgb(160 190 255 / 0.1); }
+.deck-list-title { font-weight: 600; color: #e6eaf2; white-space: nowrap; }
+.deck-list-mix { flex: 1; min-width: 0; font-size: 11px; color: #8b95a7; }
+.deck-list-mix [data-state='done'], .deck-list-rows [data-state='done'] .deck-list-state { color: #7d8699; }
+.deck-list-close { flex: none; width: 22px; height: 22px; border-radius: 6px; color: #8b95a7; line-height: 1; }
+.deck-list-close:hover { color: #fff; background: rgb(255 255 255 / 0.08); }
+.deck-list-hint { margin: 0; padding: 6px 12px 0; font-size: 11px; color: #ffb454; }
+.deck-list-rows { flex: 1 1 auto; min-height: 0; margin: 0; padding: 4px; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
+.deck-list-rows button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 6px;
+  text-align: left;
+  color: inherit;
+}
+.deck-list-rows button:hover, .deck-list-rows button:focus-visible { background: rgb(90 200 250 / 0.12); color: #fff; }
+/* Its colour is the legend's (STATE_SWATCH), set on the element. */
+.deck-list-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; }
+.deck-list-rows [data-state='done'] .deck-list-name { color: #7d8699; }
+/* The priority mark's column: as wide as the mark, empty for normal; a done step's mark dims as on the graph. */
+.deck-list-prio { flex: none; display: flex; align-items: center; width: var(--mark-w); margin-right: -2px; }
+.deck-list-rows [data-state='done'] .priority-mark { filter: brightness(0.7); }
+/* A long title takes a second line before it is cut short (the row's title and name carry it whole). */
+.deck-list-name { flex: 1; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 1.3; }
+.deck-list-meta { flex: none; display: flex; align-items: baseline; gap: 6px; font-size: 10px; color: #8b95a7; }
+.deck-list-due-inherited { font-style: italic; }
+.deck-list-due-overdue { color: #ff6b6b; }
+.deck-list-state { min-width: 44px; text-align: right; }
+.deck-list-open { margin: 0 4px 4px; padding: 5px 8px; border-top: 1px solid rgb(160 190 255 / 0.1); border-radius: 0 0 6px 6px; font-size: 11px; color: #8b95a7; text-align: left; }
+.deck-list-open:hover, .deck-list-open:focus-visible { color: #5ac8fa; }
+.deck-list-open::after { content: ' \25B8'; }

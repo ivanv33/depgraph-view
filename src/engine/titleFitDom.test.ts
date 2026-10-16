@@ -582,7 +582,7 @@ describe("runTitleFit and the selected step's brackets", () => {
 })
 
 describe('TITLE_CSS', () => {
-  const css = readFileSync(resolve(process.cwd(), 'src/view/viewer.css'), 'utf8')
+  const css = readFileSync(resolve(process.cwd(), 'src/view/labels.css'), 'utf8')
   const rule = (selector: string) => {
     const at = css.indexOf(`\n${selector} {`)
     expect(at, selector).toBeGreaterThanOrEqual(0)
@@ -634,7 +634,7 @@ describe('TITLE_CSS', () => {
 
 describe('the stylesheet and the plate\'s line breaks', () => {
   it('sets no text-wrap on a label, its card or its words: the plate knows widths from its lines as a page breaks them, each word on the line while it fits', () => {
-    const css = readFileSync(resolve(process.cwd(), 'src/view/viewer.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const css = readFileSync(resolve(process.cwd(), 'src/view/labels.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
     const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(m => ({ selector: m[1].trim(), body: m[2] }))
     const reach = rules.filter(r => /node-label|node-card|node-prio|(^|,)\s*(\*|html|body|:root|span|div)\b/.test(r.selector))
     expect(reach.length).toBeGreaterThan(10)

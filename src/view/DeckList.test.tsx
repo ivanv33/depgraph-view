@@ -47,7 +47,7 @@ describe('DeckList rows', () => {
   })
 
   it("dims a done row's mark as the graph dims a done step", () => {
-    const css = readFileSync(resolve(process.cwd(), 'src/view/viewer.css'), 'utf8')
+    const css = readFileSync(resolve(process.cwd(), 'src/view/deckList.css'), 'utf8')
     expect(css).toMatch(/\.deck-list-rows \[data-state='done'\] \.priority-mark \{ filter: brightness\(0\.7\); \}/)
   })
 })
