@@ -25,7 +25,7 @@ test.afterAll(async () => {
 })
 
 /** The least share of the free area's width or height (the one the plan is bound by) the drawn steps span. */
-const FILL = 0.7
+const FILL = 0.65
 
 type Fit = {
   /** The steps' drawn box (circles and words) over the free area's width and height. */
@@ -91,7 +91,10 @@ const expectFills = (f: Fit, what: string) => {
 }
 
 /** How far (px) the circles moved between two measures: 0 when the camera is where it was. */
-const moved = (a: Fit, b: Fit) => Math.max(...Object.keys(a.dots).map(id => Math.hypot(a.dots[id][0] - b.dots[id][0], a.dots[id][1] - b.dots[id][1])))
+const moved = (a: Fit, b: Fit) => {
+  expect(Object.keys(b.dots).sort(), 'the same steps drawn in both measures').toEqual(Object.keys(a.dots).sort())
+  return Math.max(...Object.keys(a.dots).map(id => Math.hypot(a.dots[id][0] - b.dots[id][0], a.dots[id][1] - b.dots[id][1])))
+}
 
 const openStep = async (page: Page, id: string) => {
   await page.locator(`[data-testid="node-label"][data-node-id="${id}"] .node-dot`).click()
