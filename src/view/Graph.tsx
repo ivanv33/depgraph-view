@@ -17,6 +17,7 @@ import {
   framingInsets,
   planFitTracker,
   planPoints,
+  planStrips,
   previewPlan,
   previewSelection,
   selectionFrame,
@@ -201,6 +202,12 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   const passiveRef = useRef(passiveInsets)
   useEffect(() => {
     passiveRef.current = passiveInsets
+  })
+  // The strips a whole-plan frame keeps now (the host's insets and passive strips, the legend's), for the frames run
+  // from callbacks made once (the load's fit, its preview).
+  const wholeStrips = useRef({ insets: framingInsets(insets, passiveInsets), legend })
+  useEffect(() => {
+    wholeStrips.current = { insets: framingInsets(insets, passiveInsets), legend }
   })
   // Labels are stacked left to right (stackLabels), not by distance to the camera.
   const [extraRenderers] = useState(() => {
@@ -800,7 +807,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   useEffect(() => {
     // It also waits until the titles were measured once, a few frames after the labels first draw, and does not move a
     // camera the user has moved before then: it is theirs (a drag or a wheel before the first measure).
-    const load = fitOnce(host, () => selectedRef.current !== null || !titlesMeasured.current || userMoved.moved())
+    const load = fitOnce(host, () => selectedRef.current !== null || !titlesMeasured.current || userMoved.moved(), () => wholeStrips.current)
     fitter.current = () => void load()
     afterMeasure.current = () => fitter.current()
   }, [host, userMoved])
@@ -811,7 +818,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     // Until the titles' first measure the plan is shown at its estimated frame (previewPlan: a jump, before the steps
     // first draw), so it is never drawn at the graph library's default camera; the load's frame, measured, refines it.
     // With a step selected (one in the URL) the selection's own first frame does the same (frameSelection below).
-    if (!titlesMeasured.current && selectedRef.current === null && !userMoved.moved()) previewPlan(host)
+    if (!titlesMeasured.current && selectedRef.current === null && !userMoved.moved()) previewPlan(host, wholeStrips.current.insets, wholeStrips.current.legend)
     fitter.current()
     frameSelection.current()
   }, [host, userMoved])
@@ -922,7 +929,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       return { focus: { x: focus.x, y: -focus.y }, chain, insets: framingInsets(insets, passiveRef.current), legend, dot, top: Math.max(FRAME.topInset, insets.top) }
     }
     frameSelection.current = () => {
-      const now = { id: selectedId, right: insets.right, left: insets.left, bottom: insets.bottom, chain: chainKey, at: focusKey, view: viewKey }
+      const now = { id: selectedId, right: insets.right, left: insets.left, bottom: insets.bottom, top: insets.top, legend, chain: chainKey, at: focusKey, view: viewKey }
       const fg = fgRef.current
       const viewSize = sizeRef.current
       // Before the engine first stops the window size and the camera are not settled yet: wait for it; while a resize
@@ -969,20 +976,22 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   useEffect(() => frameSelection.current(), [selectedId, insets.top, insets.right, insets.bottom, insets.left, legend, chainKey, focusKey, settled.seq])
 
   // Closing the selection, and with nothing selected a change in which nodes are drawn (decks on or off, nodes added
-  // or removed), re-fits the whole plan the way the first load does.
+  // or removed) or in the strips kept clear (the host's insets, the legend's), re-fits the whole plan the way the first
+  // load does; a strips change only while the camera is where the last frame put it.
   const drawnIds = view.nodes.map(n => n.id).sort().join('\n')
+  const stripsKey = `${insets.top},${insets.right},${insets.bottom},${insets.left},${legend ? 1 : 0}`
   // A change seen while the user drags is fitted when the drag ends.
-  const [fitTracker] = useState(() => planFitTracker({ selectedId, drawn: null }))
+  const [fitTracker] = useState(() => planFitTracker({ selectedId, drawn: null, strips: stripsKey }))
   // So is one seen during a resize: it is fitted once, at the new size, when the resize settles. One seen before the
   // titles' first measure (the plan's first drawn steps) is the load's frame, which waits for that measure (fitOnce).
   useEffect(() => {
     const later = dragging.current || !!resizing.current?.pending()
-    if (fitTracker.see({ selectedId, drawn: drawnIds }, later) && titlesMeasured.current && fitPlan(host, framingInsets(insets, passiveRef.current), legend)) userMoved.clear()
-  }, [drawnIds, selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (fitTracker.see({ selectedId, drawn: drawnIds, strips: stripsKey }, later, userMoved.moved()) && titlesMeasured.current && fitPlan(host, framingInsets(insets, passiveRef.current), legend)) userMoved.clear()
+  }, [drawnIds, selectedId, stripsKey]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     fitAfterDrag.current = () => {
       if (resizing.current?.pending()) return
-      if (fitTracker.dragEnd() && fitPlan(host, framingInsets(insets, passiveRef.current), legend)) userMoved.clear()
+      if (fitTracker.dragEnd(userMoved.moved()) && fitPlan(host, framingInsets(insets, passiveRef.current), legend)) userMoved.clear()
     }
   })
   // With nothing selected, a settled new view size fits the whole plan into it again, as the first load does (unless
@@ -995,7 +1004,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     // before the titles' first measure the load's frame is still to come, at the size then (fitOnce)
     if (!engineStopped.current || !titlesMeasured.current || dragging.current) return
     // A whole-plan fit that waited for the resize (the selection closed, or the drawn steps changed) is the one frame.
-    if (fitTracker.dragEnd()) {
+    if (fitTracker.dragEnd(userMoved.moved())) {
       if (fitPlan(host, framingInsets(insets, passiveRef.current), legend)) userMoved.clear()
       return
     }
@@ -1526,7 +1535,9 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     const camera = fg?.camera() as THREE.PerspectiveCamera | undefined
     if (!fg || !root || !camera || !(camera.position.z > 0)) return
     const { w, h } = sizeRef.current
-    const strips = frameInsets(sizeRef.current, framingInsets(insets, passiveRef.current), legend)
+    // with nothing selected, the strips the whole plan is framed with (the legend's corner kept only when it reaches it)
+    const framing = framingInsets(insets, passiveRef.current)
+    const strips = selectedId === null ? planStrips(host.nodes(), sizeRef.current, camera.fov, framing, legend) : frameInsets(sizeRef.current, framing, legend)
     const area = { left: root.left + strips.left, top: root.top + strips.top, right: root.left + w - strips.right, bottom: root.top + h - strips.bottom }
     const target = (fg.controls() as unknown as { target: THREE.Vector3 }).target
     const at = {

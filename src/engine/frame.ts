@@ -98,7 +98,13 @@ export function planPoints(
 type Vec3 = { x: number; y: number; z: number }
 export type Frame = { position: Vec3; lookAt: Vec3 }
 type View = { w: number; h: number }
-type FrameOpts = { pad: number; maxZ: number; minZ?: number; top?: number; bottom?: number; left?: number; right?: number }
+/**
+ * `pad` is the fraction of the view kept clear inside the strips on each side; `padX` and `padY`, when given, replace it
+ * across and up and down (each still a fraction of the view's width or height).
+ */
+type FrameOpts = { pad: number; padX?: number; padY?: number; maxZ: number; minZ?: number; top?: number; bottom?: number; left?: number; right?: number }
+const padX = (opts: { pad: number; padX?: number }) => opts.padX ?? opts.pad
+const padY = (opts: { pad: number; padY?: number }) => opts.padY ?? opts.pad
 
 /** Never frame into less than this fraction of the view's width or height, however much the strips cover. */
 const MIN_USABLE = 0.05
@@ -106,8 +112,8 @@ const MIN_USABLE = 0.05
 /** Fractions of the view's width and height left between the pads and the strips (at least MIN_USABLE). */
 function usable(view: View, opts: Omit<FrameOpts, 'maxZ'>): { usableW: number; usableH: number } {
   return {
-    usableW: Math.max(MIN_USABLE, 1 - 2 * opts.pad - ((opts.left ?? 0) + (opts.right ?? 0)) / view.w),
-    usableH: Math.max(MIN_USABLE, 1 - 2 * opts.pad - ((opts.top ?? 0) + (opts.bottom ?? 0)) / view.h),
+    usableW: Math.max(MIN_USABLE, 1 - 2 * padX(opts) - ((opts.left ?? 0) + (opts.right ?? 0)) / view.w),
+    usableH: Math.max(MIN_USABLE, 1 - 2 * padY(opts) - ((opts.top ?? 0) + (opts.bottom ?? 0)) / view.h),
   }
 }
 
@@ -136,13 +142,13 @@ export function frameFor(nodes: Pt[], view: { w: number; h: number }, fovDeg: nu
   const unitsPerPx = (2 * halfVisible) / view.h
   // Centred, unless that puts the box's left (right) edge inside the left (right) strip: then shift just enough.
   // Too wide for the space between the strips (clamped): centred on that space.
-  const clearLeftPx = view.w / 2 - halfW / unitsPerPx - (opts.pad * view.w + left)
-  const clearRightPx = view.w / 2 - halfW / unitsPerPx - (opts.pad * view.w + right)
+  const clearLeftPx = view.w / 2 - halfW / unitsPerPx - (padX(opts) * view.w + left)
+  const clearRightPx = view.w / 2 - halfW / unitsPerPx - (padX(opts) * view.w + right)
   const shiftPx = clearLeftPx < 0 && clearRightPx < 0 ? (right - left) / 2 : Math.max(0, -clearRightPx) - Math.max(0, -clearLeftPx)
   const cx = (minX + maxX) / 2 + shiftPx * unitsPerPx
   // Fits: centre it between the top and bottom strips. Clamped: put the top of the box at the top of that area.
   const fits = z < opts.maxZ || halfH <= halfVisible * usableH
-  const cy = fits ? (minY + maxY) / 2 + ((top - bottom) / 2) * unitsPerPx : maxY + (opts.pad * view.h + top) * unitsPerPx - halfVisible
+  const cy = fits ? (minY + maxY) / 2 + ((top - bottom) / 2) * unitsPerPx : maxY + (padY(opts) * view.h + top) * unitsPerPx - halfVisible
   const lookAt = { x: cx, y: cy, z: 0 }
   return { position: { x: cx, y: cy, z }, lookAt }
 }
@@ -195,11 +201,11 @@ export const bottomInsetFor = (hudHeight: number | null, folded = false): number
   hudHeight === null ? FRAME.bottomInset : Math.max(folded ? 0 : FRAME.bottomInset, Math.ceil(hudHeight) + FRAME.hudBottom + FRAME.hudGap)
 
 /**
- * What a selection's frame depends on: the selected id, the side panel's strip (`right`), the bottom card's strip
- * (`bottom`), the steps it is framed with (`chain`, a key of its neighbours' ids), where the selected step is laid out (`at`) and the
+ * What a selection's frame depends on: the selected id, the side panel's strip (`right`), the bottom card's or sheet's
+ * strip (`bottom`), the other strips (`top`, `left`) and whether the legend's strip is kept (`legend`), the steps it is framed with (`chain`, a key of its neighbours' ids), where the selected step is laid out (`at`) and the
  * view's settled size (`view`, a key of its width and height).
  */
-export type SelectionFrameKey = { id: string | null; right: number; left?: number; bottom?: number; chain?: string; at?: string; view?: string; folded?: boolean }
+export type SelectionFrameKey = { id: string | null; right: number; left?: number; bottom?: number; top?: number; legend?: boolean; chain?: string; at?: string; view?: string; folded?: boolean }
 
 /**
  * The camera as it is: whether the user has zoomed or panned since the last automatic frame (`userMoved`), and
@@ -253,9 +259,10 @@ export function flyStep(
 /**
  * Whether a selection needs framing, never while the user drags: a new one, the same one when the panel opens or
  * closes under it or the user folds or unfolds the bottom card (`folded`), or it gains or loses a neighbour (a need added, a link made). A new view size follows
- * shouldFrameResize. A new bottom card height or a new
- * layout under it (a step moved by an edit elsewhere) re-frames only when it leaves the chain covered or out of view,
- * and not once the user has moved the camera themselves.
+ * shouldFrameResize. Any other strip changing (a bottom sheet or card measured, growing or shrinking; the top, the left,
+ * the legend's strip) re-frames it so the chain fills the free area that is left, unless the user has moved the camera
+ * themselves. A new layout under it (a step moved by an edit elsewhere) re-frames only when it leaves the chain covered
+ * or out of view, and not once the user has moved the camera.
  */
 export function shouldFrameSelection(
   last: SelectionFrameKey,
@@ -267,10 +274,9 @@ export function shouldFrameSelection(
   if (now.id !== last.id || now.right !== last.right || now.chain !== last.chain || !!now.folded !== !!last.folded) return true
   // A new view size decides alone, whatever else changed with it (the bottom card re-wrapping at a new width).
   if (now.view !== last.view) return shouldFrameResize({ userMoved: cam.userMoved, hid: cam.hid ?? false }, false)
-  // The host left strip growing over the selection counts like a card or layout shift: only if it covers the chain.
-  const leftGrew = (now.left ?? 0) > (last.left ?? 0)
-  const shifted = now.bottom !== last.bottom || now.at !== last.at || leftGrew
-  return shifted && cam.covered && !cam.userMoved
+  const strips = now.bottom !== last.bottom || (now.left ?? 0) !== (last.left ?? 0) || (now.top ?? 0) !== (last.top ?? 0) || (now.legend ?? true) !== (last.legend ?? true)
+  if (strips) return !cam.userMoved
+  return now.at !== last.at && cam.covered && !cam.userMoved
 }
 
 /**
@@ -315,8 +321,8 @@ const cardsOf = (plan: PlanPt[]): PlanPt[] => plan.filter(p => !p.bend)
 type Strips = Omit<FrameOpts, 'maxZ' | 'minZ'>
 /** Along each axis of the view: the free area's length (less the strips), the cards' margin (the pad) and the coordinate. */
 const axesOf = (view: View, opts: Strips) => [
-  { free: view.w - (opts.left ?? 0) - (opts.right ?? 0), pad: opts.pad * view.w, of: (p: Pt) => p.x ?? 0 },
-  { free: view.h - (opts.top ?? 0) - (opts.bottom ?? 0), pad: opts.pad * view.h, of: (p: Pt) => p.y ?? 0 },
+  { free: view.w - (opts.left ?? 0) - (opts.right ?? 0), pad: padX(opts) * view.w, of: (p: Pt) => p.x ?? 0 },
+  { free: view.h - (opts.top ?? 0) - (opts.bottom ?? 0), pad: padY(opts) * view.h, of: (p: Pt) => p.y ?? 0 },
 ]
 const span = (ps: Pt[], of: (p: Pt) => number) => ({ lo: Math.min(...ps.map(of)), hi: Math.max(...ps.map(of)) })
 
@@ -545,11 +551,72 @@ export type FrameHost = {
 
 /**
  * The frame that shows the whole plan (its bounding box `nodes`) inside the free area, keeping the host's strips
- * (`host`) and the legend's strip while `legend` shows clear (frameInsets). It backs off as far as that takes: seeing all of the plan wins over the readability cap
+ * (`host`) and the legend's room while `legend` shows clear (planStrips). It backs off as far as that takes: seeing all of the plan wins over the readability cap
  * (`FRAME.minPxPerUnit`).
  */
 export function planFrame(plan: PlanPt[], view: View, fovDeg: number, host: Partial<Insets> = {}, legend = true): Frame {
-  const insets = frameInsets(view, host, legend)
+  return planFrameIn(plan, view, fovDeg, planStrips(plan, view, fovDeg, host, legend))
+}
+
+/**
+ * The strips the whole plan's frame keeps clear (planFrame): the host's (frameInsets) and, while `legend` shows, the
+ * legend's room in the bottom-left corner. On a view at least FRAME.legendMinW wide that is the left strip, as
+ * frameInsets has it. Narrower, the legend covers only that corner of a smaller view, so the plan is first framed with no
+ * strip for it; when that frame keeps every card, title and lane clear of the corner (FRAME.leftInset wide,
+ * FRAME.legendTop tall) it is the frame. Otherwise the corner is kept clear either by a left strip FRAME.leftInset wide
+ * or by a bottom strip up to the legend's top edge (on a view tall enough for it, as frameInsets has it), whichever
+ * shows the plan larger; a tie keeps frameInsets' choice. A host left strip at least as wide as the legend's already
+ * holds it: then the strips are frameInsets'.
+ */
+export function planStrips(plan: PlanPt[], view: View, fovDeg: number, host: Partial<Insets> = {}, legend = true): Insets {
+  const usual = frameInsets(view, host, legend)
+  if (!legend || view.w < FRAME.legendShowW || view.w >= FRAME.legendMinW || (host.left ?? 0) >= FRAME.leftInset || cardsOf(plan).length === 0) return usual
+  const none = frameInsets(view, host, false)
+  if (!reachesCorner(plan, planFrameIn(plan, view, fovDeg, none), view, fovDeg)) return none
+  const left = { ...none, left: Math.max(none.left, FRAME.leftInset), right: frameInsets(view, { ...host, left: Math.max(host.left ?? 0, FRAME.leftInset) }, false).right }
+  const below = { ...none, bottom: Math.max(none.bottom, FRAME.legendTop) }
+  const tall = view.h - FRAME.topInset - FRAME.legendTop >= FRAME.legendTopMinH * view.h
+  const options = [usual, left, ...(tall ? [below] : [])]
+  let best = usual
+  let bestZ = planFrameIn(plan, view, fovDeg, usual).position.z
+  for (const o of options) {
+    const z = planFrameIn(plan, view, fovDeg, o).position.z
+    if (z < bestZ - 1e-9) {
+      best = o
+      bestZ = z
+    }
+  }
+  return best
+}
+
+/**
+ * Whether the plan framed by `f` draws into the legend's corner (the view's bottom-left, FRAME.leftInset wide and
+ * FRAME.legendTop tall): the slot box's bottom-left corner grown by what an undated card draws past its slot at that
+ * zoom (pastSlots), a step drawn larger for a soon due date as drawn, or an arrow's lane or bend. The same points
+ * whether or not the titles were measured (the words run right, away from the corner).
+ */
+function reachesCorner(plan: PlanPt[], f: Frame, view: View, fovDeg: number): boolean {
+  const ppu = pxPerUnit(f.position.z, fovDeg, view.h)
+  const sx = (x: number) => view.w / 2 + (x - f.lookAt.x) * ppu
+  const sy = (y: number) => view.h / 2 - (y - f.lookAt.y) * ppu
+  const inCorner = (left: number, bottom: number) => left < FRAME.leftInset && bottom > view.h - FRAME.legendTop
+  const { cardW, cardH } = LAYOUT
+  const cards = cardsOf(plan)
+  const past = pastSlots(ppu)
+  if (inCorner(sx(Math.min(...cards.map(p => p.x ?? 0))) - past.left, sy(Math.min(...cards.map(p => p.y ?? 0))) + past.bottom)) return true
+  for (const p of plan) {
+    const x = p.x ?? 0, y = p.y ?? 0
+    if (p.bend && inCorner(sx(x), sy(y))) return true
+    if (!p.bend && (p.scale ?? 1) > 1) {
+      const grown = pastSlots(ppu, p.scale)
+      if (inCorner(sx(x - cardW / 2) - grown.left, sy(y - cardH / 2) + grown.bottom)) return true
+    }
+  }
+  return false
+}
+
+/** planFrame with its strips resolved (`insets`, every side given). */
+function planFrameIn(plan: PlanPt[], view: View, fovDeg: number, insets: Insets): Frame {
   const nodes = cardsOf(plan)
   const bends = plan.filter(p => p.bend)
   const xs = nodes.map(n => n.x ?? 0), ys = nodes.map(n => n.y ?? 0)
@@ -691,6 +758,16 @@ export function previewPlan(host: FrameHost, insets: Partial<Insets> = {}, legen
  */
 export type SelectionTarget = { focus: Pt; chain: FramePt[]; insets?: Partial<Insets>; legend?: boolean; dot?: SelectedDot; top?: number }
 
+/**
+ * The chain frame's pad as fractions of the view (chainFrame's `padX` and `padY`): CHAIN_FRAME.pad of the free area
+ * across and up and down, so a short free area (above a bottom sheet) or a narrow one (beside a side sheet) loses only
+ * its own share to the margin, not the whole view's.
+ */
+export const chainPads = (view: View, insets: Insets): { padX: number; padY: number } => ({
+  padX: (CHAIN_FRAME.pad * Math.max(0, view.w - insets.left - insets.right)) / view.w,
+  padY: (CHAIN_FRAME.pad * Math.max(0, view.h - insets.top - insets.bottom)) / view.h,
+})
+
 const selectionOf =
   (host: FrameHost, sel: SelectionTarget) =>
   (view: View, fovDeg: number): Frame => {
@@ -701,6 +778,7 @@ const selectionOf =
     const insets = frameInsets(view, given, legend)
     const chrome = Math.max(0, (sel.top ?? 0) - insets.top)
     return chainFrame(sel.focus, sel.chain, view, fovDeg, {
+      ...chainPads(view, insets),
       reach: ppu => {
         const r = selectedReach(ppu, scale, sel.dot)
         return { ...r, top: r.top + chrome }
@@ -734,47 +812,49 @@ export function previewSelection(host: FrameHost, sel: SelectionTarget): boolean
 
 /**
  * Whether to frame the whole plan again, given what was selected and drawn (`drawn` is a key of the drawn node ids,
- * null before the first layout) before and now: whenever the selection closes (with decks off the same nodes stay
- * drawn, so this is the only cue), and whenever the drawn nodes change with nothing selected. Never while the user drags.
+ * null before the first layout) and the strips kept clear (`strips`, a key of them) before and now: whenever the
+ * selection closes (with decks off the same nodes stay drawn, so this is the only cue), whenever the drawn nodes change
+ * with nothing selected, and with nothing selected whenever the strips change (a host panel, the toolbar, the legend),
+ * unless the user has moved the camera since the last frame (`userMoved`). Never while the user drags.
  */
-export function planFitStep(
-  before: { selectedId: string | null; drawn: string | null },
-  now: { selectedId: string | null; drawn: string | null },
-  dragging: boolean,
-): boolean {
+export function planFitStep(before: FitState, now: FitState, dragging: boolean, userMoved = false): boolean {
   if (now.selectedId !== null || dragging || before.drawn === null) return false
-  return before.selectedId !== null || before.drawn !== now.drawn
+  if (before.selectedId !== null || before.drawn !== now.drawn) return true
+  return (before.strips ?? '') !== (now.strips ?? '') && !userMoved
 }
 
-type FitState = { selectedId: string | null; drawn: string | null }
+type FitState = { selectedId: string | null; drawn: string | null; strips?: string }
 
 /**
  * `planFitStep` over time. `see` takes each new state; while the user drags nothing is recorded as handled, so a
- * selection closed (or a drawn-set change) mid-drag is fitted by `dragEnd` when the drag finishes.
+ * selection closed (or a drawn-set or strips change) mid-drag is fitted by `dragEnd` when the drag finishes. A strips
+ * change seen while the camera is the user's (`userMoved`) is recorded as handled: no later drag end fits for it.
  */
-export function planFitTracker(initial: FitState): { see: (now: FitState, dragging: boolean) => boolean; dragEnd: () => boolean } {
+export function planFitTracker(initial: FitState): { see: (now: FitState, dragging: boolean, userMoved?: boolean) => boolean; dragEnd: (userMoved?: boolean) => boolean } {
   let before = initial
   let latest = initial
-  const see = (now: FitState, dragging: boolean) => {
+  const see = (now: FitState, dragging: boolean, userMoved = false) => {
     latest = now
     if (dragging) return false
-    const fit = planFitStep(before, now, false)
+    const fit = planFitStep(before, now, false, userMoved)
     before = now
     return fit
   }
-  return { see, dragEnd: () => see(latest, false) }
+  return { see, dragEnd: (userMoved = false) => see(latest, false, userMoved) }
 }
 
 /**
  * Returns a handler that frames the whole plan the first time it runs with something to frame (no panel open yet),
- * then does nothing. While `selected()` is true it waits: the selection's own frame owns the camera. It returns whether
- * this call framed the plan.
+ * then does nothing. While `selected()` is true it waits: the selection's own frame owns the camera. Given `strips`,
+ * it frames with the host's strips and legend as they are when it runs (fitPlan's `insets` and `legend`), so the load's
+ * frame is the one every later whole-plan fit makes. It returns whether this call framed the plan.
  */
-export function fitOnce(host: FrameHost, selected: () => boolean = () => false): () => boolean {
+export function fitOnce(host: FrameHost, selected: () => boolean = () => false, strips?: () => { insets: Partial<Insets>; legend: boolean }): () => boolean {
   let done = false
   return () => {
     if (done || selected()) return false
-    done = fitPlan(host)
+    const s = strips?.()
+    done = fitPlan(host, s?.insets, s?.legend)
     return done
   }
 }

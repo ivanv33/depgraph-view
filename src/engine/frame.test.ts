@@ -1,6 +1,6 @@
 // The host insets passed in these tests are the values the app's layout produced at each width.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bottomInsetFor, CHAIN_FRAME, SPARE_BACKOFF, chainFrame, doneForFrame, fitOnce, fitPlan, previewPlan, planFitStep, planFitTracker, planFrame, planPoints, frameFor, frameInsets, framingInsets, FRAME, selectionFrameStep, shouldFrameResize, shouldFrameSelection, sizeSettler, hidStep, flyStep, RESIZE_SETTLE_MS, insideArea, userMoveTracker, flyTakesFrame, selectionPoints, selectionFrame, previewSelection, selectedReach, flyX, flyY, flyAt, type Frame } from './frame.js'
+import { bottomInsetFor, chainPads, CHAIN_FRAME, SPARE_BACKOFF, chainFrame, doneForFrame, fitOnce, fitPlan, previewPlan, planFitStep, planFitTracker, planFrame, planPoints, planStrips, frameFor, frameInsets, framingInsets, FRAME, selectionFrameStep, shouldFrameResize, shouldFrameSelection, sizeSettler, hidStep, flyStep, RESIZE_SETTLE_MS, insideArea, userMoveTracker, flyTakesFrame, selectionPoints, selectionFrame, previewSelection, selectedReach, flyX, flyY, flyAt, type Frame } from './frame.js'
 import { distanceFor, LABEL_SCALE, labelScale, pxPerUnit } from './camera.js'
 import { layoutPlan, LAYOUT, type Layout } from './layered.js'
 import { NEAR, SIZE } from './due.js'
@@ -99,10 +99,12 @@ describe('fitOnce', () => {
     const [position, lookAt, ms] = moves[0] as [{ z: number }, { x: number; y: number; z: number }, number]
     expect(lookAt.x).toBe(0)
     expect(lookAt.z).toBe(0)
-    // shifted so the box sits centred between the toolbar strip and the bottom strip (on an 800px-wide view with the
-    // legend shown, the bottom strip reaches up past the legend)
+    // shifted so the box sits centred between the toolbar strip and the bottom strip (on an 800px-wide view the
+    // legend's corner is kept clear only by a plan that reaches it: this one, a column in the middle, does not)
     const unitsPerPx = (2 * position.z * Math.tan(Math.PI / 6)) / 1000
-    expect(lookAt.y).toBeCloseTo(((FRAME.topInset - FRAME.legendTop) / 2) * unitsPerPx, 6)
+    const strips = planStrips(host.nodes(), host.view(), 60)
+    expect(strips.bottom).toBe(FRAME.bottomInset)
+    expect(lookAt.y).toBeCloseTo(((FRAME.topInset - strips.bottom) / 2) * unitsPerPx, 6)
     expect(position.z).toBeGreaterThan(0)
     expect(ms).toBe(FRAME.fitMs)
   })
@@ -142,6 +144,23 @@ describe('fitOnce', () => {
     expect(onStop()).toBe(true)
     expect(onStop()).toBe(false)
     expect(fitOnce({ ...host, nodes: () => [] })()).toBe(false)
+  })
+
+  it("frames with the host's strips and legend as they are when it runs, as every later whole-plan fit does", () => {
+    const moves: [{ z: number }, { x: number; y: number }][] = []
+    const host = { nodes: () => [{ x: -100, y: -300 }, { x: 100, y: 300 }], fov: () => 60, view: () => ({ w: 560, h: 900 }), move: (p: { z: number }, l: { x: number; y: number }) => moves.push([p, l]) }
+    let strips = { insets: { top: 70, right: 0, bottom: 0, left: 0 }, legend: false }
+    fitOnce(host, () => false, () => strips)()
+    fitPlan(host, strips.insets, strips.legend)
+    expect(moves[0]).toEqual(moves[1])
+    // not the default strips (a 170 px bottom band for a card the host may not have)
+    fitPlan(host)
+    expect(moves[2][0].z).toBeGreaterThan(moves[0][0].z)
+    strips = { insets: { top: 70, right: 0, bottom: 400, left: 0 }, legend: false }
+    const later = fitOnce(host, () => false, () => strips)
+    later()
+    fitPlan(host, strips.insets, false)
+    expect(moves[3]).toEqual(moves[4])
   })
 
   it('does nothing before there are nodes to frame', () => {
@@ -394,11 +413,25 @@ describe('previewSelection', () => {
     const right = 416, bottom = 230
     const expected = chainFrame(sel.focus, sel.chain, view, 60, {
       pad: CHAIN_FRAME.pad,
+      ...chainPads(view, frameInsets(view, { right, bottom }, true)),
       minZ: CHAIN_FRAME.minZ(view, 60),
       maxZ: CHAIN_FRAME.maxZ(nodes(), view, 60, { right, bottom }, true),
       ...frameInsets(view, { right, bottom }, true),
     })
     expect(selectionFrame(host([]), { ...sel, insets: { right, bottom }, legend: true })).toEqual(expected)
+  })
+
+  it('pads the chain by the chain pad of the free area, not of the whole view: a short free area (a bottom sheet) keeps more of itself for the chain', () => {
+    const view = { w: 560, h: 900 }
+    const insets = { top: 70, right: 0, bottom: 420, left: 0 }
+    // three rows: the selected step's need below it, the step that needs it above
+    const tall = { focus: { x: 0, y: 0 }, chain: [{ x: -85, y: -20 }, { x: 85, y: 20 }, { x: -85, y: 102 }, { x: 85, y: 142 }, { x: -85, y: -142 }, { x: 85, y: -102 }] }
+    const f = selectionFrame(host([], [], view), { ...tall, insets, legend: false }) as Frame
+    const ppu = pxPerUnit(f.position.z, 60, view.h)
+    const free = view.h - Math.max(FRAME.topInset, insets.top) - insets.bottom
+    expect(ppu, 'the premise: nearer than where it would stop at the cards\' largest size').toBeLessThan(LABEL_SCALE.max)
+    expect(284 * ppu).toBeCloseTo(free * (1 - 2 * CHAIN_FRAME.pad), 0)
+    expect(284 * ppu).toBeGreaterThan(free - 2 * CHAIN_FRAME.pad * view.h + 20)
   })
 
   it("keeps the selected step as drawn clear of the chrome's bottom edge (`top`) when that is lower than FRAME.topInset, and only then", () => {
@@ -545,15 +578,21 @@ describe('shouldFrameSelection', () => {
     expect(shouldFrameSelection(was, { ...was }, false, covered)).toBe(false)
     expect(shouldFrameSelection(was, { ...was, chain: 'b\nc\nd' }, true, covered)).toBe(false)
   })
-  it('re-frames for a new card height or a layout shift only when the chain would be covered or out of view', () => {
-    for (const change of [{ bottom: 320 }, { at: '200,0' }]) {
-      expect(shouldFrameSelection(was, { ...was, ...change }, false, covered)).toBe(true)
-      expect(shouldFrameSelection(was, { ...was, ...change }, false, clear)).toBe(false)
-      expect(shouldFrameSelection(was, { ...was, ...change }, true, covered)).toBe(false)
+  it('re-frames for a layout shift only when the chain would be covered or out of view', () => {
+    const change = { at: '200,0' }
+    expect(shouldFrameSelection(was, { ...was, ...change }, false, covered)).toBe(true)
+    expect(shouldFrameSelection(was, { ...was, ...change }, false, clear)).toBe(false)
+    expect(shouldFrameSelection(was, { ...was, ...change }, true, covered)).toBe(false)
+  })
+  it('re-frames for any change in the strips (a bottom sheet or card growing or shrinking, the top, the left, the legend), covered or not, so the chain fills the free area again', () => {
+    for (const change of [{ bottom: 320 }, { bottom: 60 }, { top: 120 }, { left: 296 }, { legend: false }]) {
+      expect(shouldFrameSelection({ ...was, top: 72, left: 0, legend: true }, { ...was, top: 72, left: 0, legend: true, ...change }, false, covered)).toBe(true)
+      expect(shouldFrameSelection({ ...was, top: 72, left: 0, legend: true }, { ...was, top: 72, left: 0, legend: true, ...change }, false, clear)).toBe(true)
+      expect(shouldFrameSelection({ ...was, top: 72, left: 0, legend: true }, { ...was, top: 72, left: 0, legend: true, ...change }, true, covered)).toBe(false)
     }
   })
-  it('leaves a camera the user zoomed or panned alone for a new card height or a layout shift', () => {
-    for (const change of [{ bottom: 320 }, { at: '200,0' }]) expect(shouldFrameSelection(was, { ...was, ...change }, false, moved)).toBe(false)
+  it('leaves a camera the user zoomed or panned alone for a change in the strips or a layout shift', () => {
+    for (const change of [{ bottom: 320 }, { at: '200,0' }, { top: 120 }, { left: 296 }]) expect(shouldFrameSelection(was, { ...was, ...change }, false, moved)).toBe(false)
     // a new selection or the panel opening is framed even so
     expect(shouldFrameSelection(was, { ...was, id: 'b' }, false, moved)).toBe(true)
     expect(shouldFrameSelection(was, { ...was, right: 0 }, false, moved)).toBe(true)
@@ -790,6 +829,29 @@ describe('planFitStep', () => {
   })
 })
 
+describe('planFitStep with the strips', () => {
+  const at = (selectedId: string | null, strips: string, drawn: string | null = 'a\nb') => ({ selectedId, drawn, strips })
+  it('re-fits with nothing selected when the strips change (a host panel, the legend, the toolbar), unless the user moved the camera', () => {
+    expect(planFitStep(at(null, '72,0,0,0,1'), at(null, '72,0,0,0,0'), false)).toBe(true)
+    expect(planFitStep(at(null, '72,0,0,0,1'), at(null, '72,300,0,0,1'), false)).toBe(true)
+    expect(planFitStep(at(null, '72,0,0,0,1'), at(null, '72,0,0,0,0'), false, true)).toBe(false)
+    expect(planFitStep(at(null, '72,0,0,0,1'), at(null, '72,0,0,0,0'), true)).toBe(false)
+    expect(planFitStep(at(null, '72,0,0,0,1'), at(null, '72,0,0,0,1'), false)).toBe(false)
+  })
+  it('leaves the strips of a selection to its own frame, and still fits a closed selection whatever the user did', () => {
+    expect(planFitStep(at('a', '72,0,0,0,1'), at('a', '72,0,300,0,1'), false)).toBe(false)
+    expect(planFitStep(at('a', '72,0,300,0,0'), at(null, '72,0,0,0,1'), false, true)).toBe(true)
+  })
+  it('the tracker records the strips like the rest, and fits a change seen mid-drag (or mid-resize) once it ends', () => {
+    const t = planFitTracker({ selectedId: null, drawn: null })
+    expect(t.see(at(null, 's1'), false)).toBe(false)
+    expect(t.see(at(null, 's2'), true)).toBe(false)
+    expect(t.dragEnd()).toBe(true)
+    expect(t.see(at(null, 's3'), false, true)).toBe(false) // the user's camera
+    expect(t.see(at(null, 's3'), false)).toBe(false) // seen: no fit later for it
+  })
+})
+
 describe('planFitTracker', () => {
   const at = (selectedId: string | null, drawn: string | null = 'a\nb') => ({ selectedId, drawn })
 
@@ -833,6 +895,44 @@ describe('fitPlan with the legend', () => {
     // with the legend the box shifts right of its strip; without it the plan is centred
     expect(moves[0][1].x).toBeLessThan(moves[1][1].x)
     expect(moves[1][1].x).toBeCloseTo(0, 5)
+  })
+})
+
+describe("planStrips: the legend's corner on a view narrower than FRAME.legendMinW", () => {
+  const fov = 50
+  const view = { w: 880, h: 700 }
+  const host = { top: 64, right: 0, bottom: 0, left: 0 }
+  const z = (strips: { top: number; right: number; bottom: number; left: number }, plan: { x: number; y: number }[]) => frameFor(plan, view, fov, { pad: FRAME.fitPad, maxZ: Infinity, ...strips }).position.z
+  const tall = [{ x: -350, y: 20 }, { x: 350, y: -700 }]
+  const wide = [{ x: -900, y: 20 }, { x: 900, y: -250 }]
+  it('keeps a tall plan clear of it by a left strip, which shows it larger than the bottom strip would', () => {
+    const s = planStrips(tall, view, fov, host)
+    expect(s).toEqual({ top: 72, right: 0, bottom: 0, left: FRAME.leftInset })
+    expect(z(s, tall)).toBeLessThan(z(frameInsets(view, host, true), tall))
+    expect(planFrame(tall, view, fov, host)).toEqual(planFrame(tall, view, fov, { ...host, left: FRAME.leftInset }, false))
+  })
+  it('keeps a wide plan clear of it by a strip up to its top edge, where that shows it larger', () => {
+    const s = planStrips(wide, view, fov, host)
+    expect(s).toEqual({ top: 72, right: 0, bottom: FRAME.legendTop, left: 0 })
+    expect(z(s, wide)).toBeLessThan(z({ ...s, bottom: 0, left: FRAME.leftInset }, wide))
+  })
+  it('keeps no strip for a plan whose frame stays clear of the corner without one', () => {
+    // one narrow column in the middle of the view
+    const column = [{ x: -60, y: 20 }, { x: 60, y: -700 }]
+    expect(planStrips(column, view, fov, host)).toEqual(frameInsets(view, host, false))
+    expect(planFrame(column, view, fov, host)).toEqual(planFrame(column, view, fov, host, false))
+  })
+  it('never draws the slot box into the corner it keeps clear', () => {
+    for (const plan of [tall, wide, [{ x: -400, y: 20 }, { x: 400, y: -400 }], [{ x: -100, y: 20 }, { x: 3000, y: -60 }]]) {
+      const f = planFrame(plan, view, fov, host)
+      const ppu = pxPerUnit(f.position.z, fov, view.h)
+      const left = view.w / 2 + (plan[0].x - f.lookAt.x) * ppu, bottom = view.h / 2 - (plan[1].y - f.lookAt.y) * ppu
+      expect(left >= FRAME.leftInset - 1e-6 || bottom <= view.h - FRAME.legendTop + 1e-6).toBe(true)
+    }
+  })
+  it("leaves the strips as frameInsets has them on a wide view, with the legend off, below the legend's width, or under a host left strip", () => {
+    for (const [v, h, legend] of [[{ w: 1100, h: 900 }, host, true], [view, host, false], [{ w: 600, h: 900 }, host, true], [view, { ...host, left: 300 }, true]] as const)
+      expect(planStrips(tall, v, fov, h, legend)).toEqual(frameInsets(v, h, legend))
   })
 })
 
@@ -1103,12 +1203,13 @@ describe('the host left strip under the legend width', () => {
     expect(frameInsets({ w: 1000, h: 740 }, { right: 0, bottom: 170 }, true).left).toBe(FRAME.leftInset)
     expect(frameInsets({ w: 1000, h: 740 }, { right: 0, bottom: 170 }, false).left).toBe(0)
   })
-  it('re-frames a selection when it opens over it and only if that leaves the chain covered', () => {
+  it('re-frames a selection when it opens or closes over it, unless the user moved the camera', () => {
     const last = { id: 'a', right: 0, left: 0, bottom: 170, chain: 'x' }
     const now = { ...last, left: 296 }
     expect(shouldFrameSelection(last, now, false, { userMoved: false, covered: true })).toBe(true)
-    expect(shouldFrameSelection(last, now, false, { userMoved: false, covered: false })).toBe(false)
-    expect(shouldFrameSelection(now, last, false, { userMoved: false, covered: true })).toBe(false) // closing never moves it
+    expect(shouldFrameSelection(last, now, false, { userMoved: false, covered: false })).toBe(true)
+    expect(shouldFrameSelection(now, last, false, { userMoved: false, covered: false })).toBe(true) // closing gives the room back
+    expect(shouldFrameSelection(now, last, false, { userMoved: true, covered: true })).toBe(false)
   })
 })
 
@@ -1190,7 +1291,7 @@ describe('the whole-plan frame counts the cards as drawn past the card floor', (
       bottom: s.y(hi.y + cardH / 2) + (cardH / 2) * k,
     }
   }
-  const slotsFrame = (plan: { x: number; y: number }[], view: { w: number; h: number }) => frameFor(plan, view, fov, { pad: FRAME.fitPad, maxZ: Infinity, ...frameInsets(view) })
+  const slotsFrame = (plan: { x: number; y: number }[], view: { w: number; h: number }) => frameFor(plan, view, fov, { pad: FRAME.fitPad, maxZ: Infinity, ...planStrips(plan, view, fov) })
   const M = FRAME.edgeMargin
 
   for (const view of [{ w: 800, h: 740 }, { w: 1280, h: 720 }]) {
@@ -1199,7 +1300,7 @@ describe('the whole-plan frame counts the cards as drawn past the card floor', (
         const plan = box(slots, rows)
         const d = drawn(planFrame(plan, view, fov), view, plan)
         expect(d.ppu, 'the premise: past the card floor').toBeLessThan(LABEL_SCALE.min)
-        const insets = frameInsets(view)
+        const insets = planStrips(plan, view, fov)
         const room = [d.left - insets.left, view.w - insets.right - d.right, d.top - insets.top, view.h - insets.bottom - d.bottom]
         for (const r of room) expect(r).toBeGreaterThanOrEqual(M - 1e-6)
         // the frame is the slots' own unless that leaves an edge less than M inside; then the binding side is M inside
@@ -1458,7 +1559,7 @@ describe('the whole-plan frame keeps every arrow bend inside the window', () => 
       expect(Math.min(...xs)).toBeLessThan(-bends.width / 2)
       expect(Math.max(...xs)).toBeGreaterThan(bends.width / 2)
       const s = onScreen(planFrame(planPoints(bends, () => 1), view, fov), view)
-      const insets = frameInsets(view)
+      const insets = planStrips(planPoints(bends, () => 1), view, fov)
       const left = Math.min(...xs.map(s.x)) - insets.left
       const right = view.w - insets.right - Math.max(...xs.map(s.x))
       expect(left).toBeGreaterThanOrEqual(M - 1e-6)
@@ -1469,7 +1570,7 @@ describe('the whole-plan frame keeps every arrow bend inside the window', () => 
 
     it(`still keeps every card and title of that plan at least ${M} px inside the free area at ${view.w}x${view.h}`, () => {
       const s = onScreen(planFrame(planPoints(bends, () => 1), view, fov), view)
-      const insets = frameInsets(view)
+      const insets = planStrips(planPoints(bends, () => 1), view, fov)
       for (const n of bends.nodes.values()) {
         const cx = s.x(n.x), cy = s.y(-n.y)
         expect(cx - (cardW / 2) * s.k - insets.left, `${n.id} left`).toBeGreaterThanOrEqual(M - 1e-6)
