@@ -57,7 +57,7 @@ test('the panel shows the body, both lists and the files', async ({ page }) => {
 test('editing an md file reloads and updates the title', async ({ page }) => {
   await page.goto(url)
   await waitForStill(page)
-  writeFileSync(join(dir, 'nodes/water-rota/water-rota.md'), '---\ntitle: Water every evening\n---\n')
+  writeFileSync(join(dir, 'nodes/water-rota.context/water-rota.md'), '---\ntitle: Water every evening\n---\n')
   await expect(label(page, 'water-rota')).toContainText('Water every evening', { timeout: 10000 })
 })
 
@@ -69,15 +69,15 @@ test('a ?step= URL opens with that step selected', async ({ page }) => {
 
 test('an invalid save shows a dismissible banner and keeps the graph', async ({ page }) => {
   await page.goto(url)
-  const good = readFileSync(join(dir, 'graph.json'), 'utf8')
-  writeFileSync(join(dir, 'graph.json'), '{ broken')
+  const good = readFileSync(join(dir, 'graph.yaml'), 'utf8')
+  writeFileSync(join(dir, 'graph.yaml'), 'name: [unclosed\n')
   try {
     await expect(page.getByTestId('error-banner')).toBeVisible({ timeout: 10000 })
     await expect(page.getByTestId('node-label')).toHaveCount(6)
     await page.getByTestId('error-banner').getByRole('button', { name: 'Dismiss' }).click()
     await expect(page.getByTestId('error-banner')).toHaveCount(0)
   } finally {
-    writeFileSync(join(dir, 'graph.json'), good)
+    writeFileSync(join(dir, 'graph.yaml'), good)
   }
 })
 

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { stringify } from 'yaml'
 import { bigPlan } from './bigPlan.js'
 import { newFixtureDir, writeFixture, type FixtureStep } from './fixtureFolder.js'
 import { waitForStill } from './helpers.js'
@@ -160,14 +161,14 @@ for (const vp of [
       await expect(label(page, 'a0-0')).toHaveAttribute('data-selected', 'true')
       await waitForStill(page, 30000)
       const s = await timed(page, 'add', vp, async () => {
-        // the eight new md files first, then graph.json naming them (the shape writeFixture writes)
+        // the eight new md files first, then graph.yaml naming them (the shape writeFixture writes)
         const plan = bigPlan(8)
         for (const step of plan.nodes.filter(n => /^n\d+$/.test(n.id))) {
-          await mkdir(join(dir, 'nodes', step.id), { recursive: true })
-          await writeFile(join(dir, 'nodes', step.id, `${step.id}.md`), `---\ntitle: ${step.title}\nstatus: ${step.status}\n---\n`)
+          await mkdir(join(dir, 'nodes', `${step.id}.context`), { recursive: true })
+          await writeFile(join(dir, 'nodes', `${step.id}.context`, `${step.id}.md`), `---\ntitle: ${step.title}\nstatus: ${step.status}\n---\n`)
         }
-        const nodes = plan.nodes.map(n => ({ id: n.id, md: `nodes/${n.id}/${n.id}.md`, dir: `nodes/${n.id}`, depends_on: n.depends_on }))
-        await writeFile(join(dir, 'graph.json'), JSON.stringify({ name: PLAN_NAME, nodes }, null, 2))
+        const nodes = Object.fromEntries(plan.nodes.map(n => [n.id, { needs: n.depends_on }]))
+        await writeFile(join(dir, 'graph.yaml'), stringify({ name: PLAN_NAME, nodes }))
         await expect(page.getByTestId('node-label')).toHaveCount(335, { timeout: 30000 })
       })
       checkShape(s, 'add')
