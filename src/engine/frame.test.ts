@@ -550,6 +550,17 @@ describe('fitPlan', () => {
 })
 
 describe('shouldFrameSelection', () => {
+  it('after a fly, a strips change alone leaves the camera to the fly unless the chain is covered', () => {
+    const last = { id: 'a', right: 0, bottom: 300, top: 72, left: 0, legend: true, at: 'k' }
+    for (const now of [{ ...last, bottom: 420 }, { ...last, top: 90 }, { ...last, legend: false }, { ...last, left: 40 }]) {
+      expect(shouldFrameSelection(last, now, false, { userMoved: false, covered: false, flown: true })).toBe(false)
+      expect(shouldFrameSelection(last, now, false, { userMoved: false, covered: true, flown: true })).toBe(true)
+      expect(shouldFrameSelection(last, now, false, { userMoved: false, covered: false })).toBe(true)
+    }
+    // a new selection, or the side panel opening or closing, still frames
+    expect(shouldFrameSelection(last, { ...last, id: 'b' }, false, { userMoved: false, covered: false, flown: true })).toBe(true)
+    expect(shouldFrameSelection(last, { ...last, right: 416 }, false, { userMoved: false, covered: false, flown: true })).toBe(true)
+  })
   const last = { id: 'a', right: 416 }
   it('frames a new selection, or the same one when the panel opens or closes under it', () => {
     expect(shouldFrameSelection(last, { id: 'b', right: 416 }, false)).toBe(true)

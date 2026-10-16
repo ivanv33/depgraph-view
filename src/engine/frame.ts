@@ -212,7 +212,11 @@ export type SelectionFrameKey = { id: string | null; right: number; left?: numbe
  * whether the chain is now covered by a strip or out of view (`covered`, measured with the new strips). For a new view
  * size, `hid`: whether the resize hid a step that was in view just before it began (hidStep).
  */
-export type SelectionCamera = { userMoved: boolean; covered: boolean; hid?: boolean }
+/**
+ * The camera as the selection's frame sees it: moved by the user since the last frame, the chain covered by a strip
+ * or out of view, a step hidden by the last resize, and `flown` while a flyTo (not a frame) last placed it.
+ */
+export type SelectionCamera = { userMoved: boolean; covered: boolean; hid?: boolean; flown?: boolean }
 
 /** How long the view's size must hold before a resize counts (dragging a window edge is one resize, framed once). */
 export const RESIZE_SETTLE_MS = 200
@@ -261,7 +265,7 @@ export function flyStep(
  * closes under it or the user folds or unfolds the bottom card (`folded`), or it gains or loses a neighbour (a need added, a link made). A new view size follows
  * shouldFrameResize. Any other strip changing (a bottom sheet or card measured, growing or shrinking; the top, the left,
  * the legend's strip) re-frames it so the chain fills the free area that is left, unless the user has moved the camera
- * themselves. A new layout under it (a step moved by an edit elsewhere) re-frames only when it leaves the chain covered
+ * themselves, or a flyTo placed it and the chain is not covered. A new layout under it (a step moved by an edit elsewhere) re-frames only when it leaves the chain covered
  * or out of view, and not once the user has moved the camera.
  */
 export function shouldFrameSelection(
@@ -275,7 +279,8 @@ export function shouldFrameSelection(
   // A new view size decides alone, whatever else changed with it (the bottom card re-wrapping at a new width).
   if (now.view !== last.view) return shouldFrameResize({ userMoved: cam.userMoved, hid: cam.hid ?? false }, false)
   const strips = now.bottom !== last.bottom || (now.left ?? 0) !== (last.left ?? 0) || (now.top ?? 0) !== (last.top ?? 0) || (now.legend ?? true) !== (last.legend ?? true)
-  if (strips) return !cam.userMoved
+  // After a fly the camera is the fly's: a strip changing alone takes it back only when the chain is covered.
+  if (strips) return !cam.userMoved && (!cam.flown || cam.covered)
   return now.at !== last.at && cam.covered && !cam.userMoved
 }
 

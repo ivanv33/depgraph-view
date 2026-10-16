@@ -749,6 +749,8 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   const view = useMemo(() => deckView(plan, selectedId, grouping, opened), [plan, selectedId, grouping, opened])
   // The last fly signal acted on (its seq).
   const flown = useRef<number | null>(null)
+  // Whether a flyTo, not a frame, last placed the camera: a strips change alone then leaves it unless the chain is covered.
+  const flyOwns = useRef(false)
   // The drawn node a fly goes to (a step folded into a deck: its deck), if there is one yet.
   const flyNode = (fly: NodeSignal | null) => (fly ? cache.get(view.hidden.get(fly.id)?.[0] ?? fly.id) : undefined)
   useEffect(() => {
@@ -942,6 +944,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       const ready = engineStopped.current && !resizing.current?.pending() && !unsettled
       const step = selectionFrameStep(framed.current, now, ready, dragging.current, {
         userMoved: userMoved.moved(),
+        flown: flyOwns.current,
         get covered() {
           return covered()
         },
@@ -958,6 +961,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       if (flyTakesFrame(flyTo, flown.current, selectedId, !!fg && flyNode(flyTo) !== undefined)) {
         framed.current = now
         userMoved.clear()
+        flyOwns.current = true
         return
       }
       const sel = selection()
@@ -971,6 +975,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       moveCamera(position, lookAt, FRAME.fitMs)
       framed.current = now
       userMoved.clear()
+      flyOwns.current = false
     }
   })
   useEffect(() => frameSelection.current(), [selectedId, insets.top, insets.right, insets.bottom, insets.left, legend, chainKey, focusKey, settled.seq])
@@ -1015,6 +1020,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   // graph is mounted counts: a plan switch remounts it under the old count.
   useNewPress(fitAll, () => {
     userMoved.clear()
+    flyOwns.current = false
     fitPlan(host, framingInsets(insets, passiveRef.current), legend)
   })
   // Each deck is drawn as one node whose look comes from its members; a zoom step that lists as many keeps the same map.
@@ -1054,6 +1060,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     const lookAt = { ...target.lookAt, x: target.lookAt.x - shiftX, y: target.lookAt.y + shiftY }
     moveCamera(position, lookAt, 800)
     userMoved.clear()
+    flyOwns.current = true
   }, [flyTo, cache, settled.seq, selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
