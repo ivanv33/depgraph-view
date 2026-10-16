@@ -363,7 +363,6 @@ describe('the stylesheet', () => {
     // nowhere else spells the numbers out: every rule reads the properties
     const rest = css.replace(root, '')
     expect(rest).not.toMatch(new RegExp(`${MARK_EM.h}em|${MARK_EM.gap}em|\\* ${PRIORITY_MARK.w} / ${PRIORITY_MARK.h}`))
-    // and the search's mark column is as wide as the mark, read from the same property
   })
 
   it("dims a done deck member's mark, as a done step's mark dims with its card", () => {
