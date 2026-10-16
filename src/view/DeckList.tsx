@@ -22,7 +22,7 @@ interface DeckListProps {
    */
   frameRef: RefObject<DeckListFrame | null>
   /** The host's chrome over the graph, in window px (insetBoxes): the list stays clear of it. */
-  around: { toolbar?: Box; panel?: Box }
+  around: { toolbar?: Box; panel?: Box; hud?: Box }
   /** A step is being picked to link to: the list says so, and offers no branch to open. */
   linking?: boolean
   onPick: (id: string) => void

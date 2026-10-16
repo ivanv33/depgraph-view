@@ -7,7 +7,7 @@ A read-only 3D viewer for dependency graphs. Point it at a plan YAML file that l
 ## Quick start
 
 ```sh
-npx github:ivanv33/depgraph-view#v0.2.1 garden
+npx github:ivanv33/depgraph-view#v0.2.2 garden
 ```
 
 `garden` is a folder holding the plan file `garden.yaml` (see [The plan file](#the-plan-file)). This runs the viewer straight from GitHub. A git install builds from source, so the first run takes a minute.
@@ -44,13 +44,13 @@ npx https://github.com/ivanv33/depgraph-view garden
 To pin a release, add its tag:
 
 ```sh
-npx github:ivanv33/depgraph-view#v0.2.1 garden
+npx github:ivanv33/depgraph-view#v0.2.2 garden
 ```
 
 As a dependency in `package.json`:
 
 ```json
-"depgraph-view": "github:ivanv33/depgraph-view#v0.2.1"
+"depgraph-view": "github:ivanv33/depgraph-view#v0.2.2"
 ```
 
 A git install builds the package from source, so it is slower than installing the npm package.
@@ -245,7 +245,7 @@ Version 0.1.0 read a JSON graph file. A `.json` path, or a folder with no `.yaml
 - **The graph.** Each step is a node with its title, laid out in layers along its dependencies. Click a step to select it. Click the background to clear the selection. Escape clears it too.
 - **The toolbar** (top left) holds the search box and two buttons. `Group` draws only the path to the selection and its subtree, and folds every other branch into a deck. It is on by default, and the browser remembers your choice. `Fit` frames the whole plan and keeps the selection.
 - **Search** matches steps by title or by id. Up and Down move the highlight, Enter or a click selects the step, and Escape clears the box.
-- **The panel** (right) opens for the selected step. It shows the title, the readiness state, the priority, the due date and the tags when set, and the md body as markdown. Under it are the steps it depends on and the steps that need it, each a button that selects that step. Last is the step's file list. Each file opens in a new tab from `/files/<id>/<path>`.
+- **The panel** opens for the selected step: at the right on a wide or landscape window, along the bottom on a narrow portrait one (a phone, a tablet upright, a narrow pane), with the graph framed in the room left beside or above it. It is as tall as its content; a long step scrolls under its title. It shows the title, the readiness state, the priority, the due date and the tags when set, and the md body as markdown. Under it are the steps it depends on and the steps that need it, each a button that selects that step. Last is the step's file list. Each file opens in a new tab from `/files/<id>/<path>`.
 - **The legend** (bottom left) counts the steps per readiness state (Ready, Doing, Waiting, Blocked, Done) and on hold, and explains the priority marks and the edge styles.
 - **Warnings** from loading sit in a collapsed list in the bottom left corner.
 - **`?step=<id>`.** The page keeps the selected step in the URL, so a link opens with that step selected.
@@ -308,14 +308,15 @@ import 'depgraph-view/viewer.css'
 | `onSelect` | `(id: string \| null) => void` | Called on a click: a step's id, or `null` for the background. |
 | `grouped` | `boolean` | Draw only the path to the selection and its subtree; other branches fold into decks. |
 | `today` | `string` | The local date, `YYYY-MM-DD`, that due dates are read against. |
-| `insets` | `{ top, right, bottom, left }` | How far the host's chrome (toolbar, panel) reaches in from each window edge, in CSS pixels. `Graph` never measures the host page. Whatever the insets say, `Graph` always keeps a 72 px top band clear and, on views at least 900 px wide, a 240 px left band for the Legend. |
+| `insets` | `{ top, right, bottom, left }` | How far the host's chrome (toolbar, panel) reaches in from each window edge, in CSS pixels. `Graph` never measures the host page. Whatever the insets say, `Graph` always keeps a 72 px top band clear and, while `legend` is on, the Legend's room (on views at least 900 px wide, a 240 px left band). |
 | `fitAll` | `number` | Change it to frame the whole plan; the selection stays. |
 | `onGlides` | `(history) => void` | Optional. Receives the transition timing history after each transition. |
 | `focusFallback` | `() => HTMLElement \| null` | Optional. Where keyboard focus goes when no step label can take it. |
+| `legend` | `boolean` | Optional, default `true`. Whether the host shows the Legend in the bottom-left corner; when `false` the frames use its room. |
 
 ### The other components
 
-- `Panel` (`PanelProps`: `plan`, `id`, `body`, `files`, `today`, `onSelect`, `onClose`) is the step panel.
+- `Panel` (`PanelProps`: `plan`, `id`, `body`, `files`, `today`, `onSelect`, `onClose`) is the step panel. It is as tall as its content, up to the height its container allows; past that the part under its title scrolls.
 - `Search` (`SearchProps`: `plan`, `today`, `onPick`) is the search box.
 - `Legend` shows the counts per readiness state (Ready, Doing, Waiting, Blocked, Done) and on hold, plus the priority marks and the edge key.
 

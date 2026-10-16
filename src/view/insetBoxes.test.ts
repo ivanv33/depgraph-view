@@ -9,4 +9,11 @@ describe('insetBoxes', () => {
     })
     expect(insetBoxes({ w: 1000, h: 700 }, { top: 0, right: 0, bottom: 0, left: 0 })).toEqual({})
   })
+
+  it('turns a bottom sheet\'s height into a box across the bottom', () => {
+    expect(insetBoxes({ w: 390, h: 844 }, { top: 114, right: 0, bottom: 300, left: 0 })).toEqual({
+      toolbar: { left: 0, top: 0, right: 390, bottom: 114 },
+      hud: { left: 0, top: 544, right: 390, bottom: 844 },
+    })
+  })
 })

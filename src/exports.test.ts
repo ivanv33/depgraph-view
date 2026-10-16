@@ -60,7 +60,8 @@ describe('package exports', () => {
   it('viewer.css imports both right after Tailwind and keeps only the page rules', () => {
     const css = read('src/view/viewer.css')
     expect(css.startsWith('@import "tailwindcss" source(".");\n@import "./labels.css";\n@import "./deckList.css";\n')).toBe(true)
-    for (const s of ['.node-dot {', '--mark-h:', '.glass {', '.deck-list {', 'dg-shake']) expect(css).not.toContain(s)
+    for (const s of ['.node-dot {', '--mark-h:', '.deck-list {', 'dg-shake']) expect(css).not.toContain(s)
+    expect(css).not.toMatch(/^\.glass \{/m) // the glass rule lives in labels.css; the page's bottom sheet only tints it
     for (const s of ['color-scheme: dark;', 'body {', 'button:focus-visible', '.md {', '.panel-section-label {']) expect(css).toContain(s)
   })
 

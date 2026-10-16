@@ -19,6 +19,6 @@ describe('Graph and its companions keep the cut', () => {
     const src = readFileSync('src/view/Graph.tsx', 'utf8')
     const block = src.slice(src.indexOf('export interface GraphProps'), src.indexOf('}', src.indexOf('export interface GraphProps')))
     const names = [...block.matchAll(/^\s+(\w+)\??:/gm)].map(m => m[1]).sort()
-    expect(names).toEqual(['arming', 'fitAll', 'focusFallback', 'grouped', 'insets', 'onAddAt', 'onGlides', 'onLinkContextMenu', 'onPick', 'onSelect', 'onShiftLink', 'plan', 'selected', 'today'])
+    expect(names).toEqual(['arming', 'fitAll', 'focusFallback', 'grouped', 'insets', 'legend', 'onAddAt', 'onGlides', 'onLinkContextMenu', 'onPick', 'onSelect', 'onShiftLink', 'plan', 'selected', 'today'])
   })
 })

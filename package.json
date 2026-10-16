@@ -1,6 +1,6 @@
 {
   "name": "depgraph-view",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A read-only 3D viewer for dependency graphs: point it at a plan YAML file and browse the plan on localhost, with live reload.",
   "keywords": [
     "dependency-graph",

@@ -7,6 +7,11 @@ body { margin: 0; }
 
 body { font-family: 'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif; }
 
+/* A bottom sheet lies over the graph itself, not beside it: denser, so the steps under it do not show through as blurs. */
+[data-sheet='bottom'] > .glass {
+  background: linear-gradient(160deg, rgb(20 24 36 / 0.9), rgb(8 10 16 / 0.94));
+}
+
 button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
   outline: 2px solid rgb(90 200 250 / 0.7);
   outline-offset: 1px;
