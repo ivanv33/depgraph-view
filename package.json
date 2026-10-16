@@ -1,0 +1,67 @@
+{
+  "name": "depgraph-view",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "depgraph-view": "bin/depgraph-view.js"
+  },
+  "files": [
+    "dist",
+    "lib",
+    "bin"
+  ],
+  "exports": {
+    ".": {
+      "types": "./lib/view/index.d.ts",
+      "default": "./lib/view/index.js"
+    },
+    "./engine": {
+      "types": "./lib/engine/index.d.ts",
+      "default": "./lib/engine/index.js"
+    },
+    "./server": {
+      "types": "./lib/server/index.d.ts",
+      "default": "./lib/server/index.js"
+    },
+    "./viewer.css": "./dist/viewer.css"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build:lib && npm run build:view",
+    "build:lib": "tsc -p tsconfig.build.json",
+    "build:view": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:e2e": "npm run build && playwright test",
+    "prepack": "rm -rf dist lib && npm run build"
+  },
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-force-graph-3d": "^1.29.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "three": "^0.186.1",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@fontsource-variable/instrument-sans": "^5.3.0",
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/vite": "^4",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^22.20.4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "jsdom": "^30.1.1",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vite": "^8",
+    "vitest": "^5.0.2"
+  }
+}
