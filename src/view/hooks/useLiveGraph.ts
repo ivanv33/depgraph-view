@@ -35,7 +35,8 @@ function messageOf(e: Event): string | null {
 }
 
 /**
- * The served graph, kept live: fetched once on mount and again on each `reload` event (which clears `error`). An
+ * The served graph, kept live: fetched once on mount, again on each `reload` event (which clears `error`) and again
+ * whenever the stream reopens after a drop (which also clears `error`; the server resends one still standing). An
  * `error` event with data (a reload the server rejected) sets `error` and keeps the last good `data`; so does a failed
  * fetch. The event stream closes on unmount.
  */
@@ -70,13 +71,23 @@ export function useLiveGraph(deps: LiveGraphDeps = {}): { data: GraphPayload | n
       const message = messageOf(e)
       if (message !== null) setError(message)
     }
+    // A `reload` sent while the stream was down is lost, so every reopen after the first refetches. The
+    // server resends a standing error on connect, so the old message is cleared rather than kept.
+    let opened = false
+    const onOpen = () => {
+      if (!opened) return void (opened = true)
+      setError(null)
+      load(false)
+    }
     events.addEventListener('reload', onReload)
     events.addEventListener('error', onError)
+    events.addEventListener('open', onOpen)
     load(false)
     return () => {
       live = false
       events.removeEventListener('reload', onReload)
       events.removeEventListener('error', onError)
+      events.removeEventListener('open', onOpen)
       events.close()
     }
   }, [fetchGraph, openEvents])

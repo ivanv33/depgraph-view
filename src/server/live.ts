@@ -1,4 +1,5 @@
 import { watch } from 'chokidar'
+import { realpathSync } from 'node:fs'
 import path from 'node:path'
 import { GraphError, loadGraphFile, type LoadResult } from './loader.js'
 
@@ -11,6 +12,8 @@ export type LiveEvent = { type: 'reload'; generatedAt: string } | { type: 'error
 export interface GraphSource {
   current(): Snapshot
   on(listener: (e: LiveEvent) => void): () => void
+  /** The message of the last `error` sent, or null once a good reload follows it; absent means never. */
+  error?(): string | null
   close(): Promise<void>
 }
 
@@ -37,6 +40,17 @@ function inside(dir: string, p: string): boolean {
   return rel !== '' && !rel.startsWith(`..${path.sep}`) && rel !== '..' && !path.isAbsolute(rel)
 }
 
+const SKIPPED_SEGMENT = /(^|[\\/])(\.git|node_modules)([\\/]|$)/
+
+/**
+ * Whether chokidar should skip `p`: it has a `.git` or `node_modules` segment below the graph's folder
+ * (as `listFiles` skips them), tested relative to that folder so a plan living under one still works.
+ */
+function skipped(roots: string[], p: string): boolean {
+  const root = roots.find(r => r === p || inside(r, p))
+  return root !== undefined && SKIPPED_SEGMENT.test(path.relative(root, p))
+}
+
 /** A source that follows its files; `ready` resolves once the watcher is live. */
 export interface WatchedSource extends GraphSource {
   ready(): Promise<void>
@@ -57,13 +71,17 @@ export function watchedSource(jsonPath: string, debounceMs = 150): WatchedSource
   let snapshot: Snapshot = { result: loadGraphFile(jsonPath), generatedAt: new Date().toISOString() }
   let watched = watchList(jsonPath, snapshot.result)
   const listeners = new Set<(e: LiveEvent) => void>()
+  let lastError: string | null = null
   const emit = (e: LiveEvent) => {
+    lastError = e.type === 'error' ? e.message : null
     for (const listener of [...listeners]) listener(e)
   }
   let timer: NodeJS.Timeout | undefined
   let closed = false
 
-  const watcher = watch([...watched], { ignoreInitial: true, followSymlinks: false })
+  const rootDir = path.dirname(path.resolve(jsonPath))
+  const roots = [rootDir, realpathSync(rootDir)]
+  const watcher = watch([...watched], { ignoreInitial: true, followSymlinks: false, ignored: (p: string) => skipped(roots, p) })
   let live = false
 
   /** Reads the graph again; `announce` sends the outcome to listeners, otherwise a failure is dropped. */
@@ -79,8 +97,9 @@ export function watchedSource(jsonPath: string, debounceMs = 150): WatchedSource
     }
     snapshot = { result, generatedAt: new Date().toISOString() }
     const next = watchList(jsonPath, result)
-    // Unwatching a path under a folder that is still watched would make chokidar ignore that subtree.
-    const gone = [...watched].filter(p => !next.has(p) && ![...next].some(k => inside(k, p)))
+    // Unwatching a path under a folder that is still watched would make chokidar ignore that subtree;
+    // unwatching a folder that holds a still-watched path drops that path too.
+    const gone = [...watched].filter(p => !next.has(p) && ![...next].some(k => inside(k, p) || inside(p, k)))
     const added = [...next].filter(p => !watched.has(p))
     if (gone.length) watcher.unwatch(gone)
     if (added.length) watcher.add(added)
@@ -118,6 +137,7 @@ export function watchedSource(jsonPath: string, debounceMs = 150): WatchedSource
       listeners.add(listener)
       return () => void listeners.delete(listener)
     },
+    error: () => lastError,
     ready: () => ready,
     close: async () => {
       if (closed) return

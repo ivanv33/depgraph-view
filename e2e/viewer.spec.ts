@@ -71,11 +71,14 @@ test('an invalid save shows a dismissible banner and keeps the graph', async ({ 
   await page.goto(url)
   const good = readFileSync(join(dir, 'graph.json'), 'utf8')
   writeFileSync(join(dir, 'graph.json'), '{ broken')
-  await expect(page.getByTestId('error-banner')).toBeVisible({ timeout: 10000 })
-  await expect(page.getByTestId('node-label')).toHaveCount(6)
-  await page.getByTestId('error-banner').getByRole('button', { name: 'Dismiss' }).click()
-  await expect(page.getByTestId('error-banner')).toHaveCount(0)
-  writeFileSync(join(dir, 'graph.json'), good)
+  try {
+    await expect(page.getByTestId('error-banner')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('node-label')).toHaveCount(6)
+    await page.getByTestId('error-banner').getByRole('button', { name: 'Dismiss' }).click()
+    await expect(page.getByTestId('error-banner')).toHaveCount(0)
+  } finally {
+    writeFileSync(join(dir, 'graph.json'), good)
+  }
 })
 
 test('warnings are listed in a collapsed footer', async ({ page }) => {

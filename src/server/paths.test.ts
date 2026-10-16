@@ -1,4 +1,4 @@
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { makeFolder, removeFolders } from './__tests__/folder.js'
@@ -52,5 +52,14 @@ describe('listFiles', () => {
   it('cuts the list at the limit', () => {
     const root = makeFolder({ 'a.txt': '', 'b.txt': '', 'c.txt': '' })
     expect(listFiles(root, 2)).toEqual({ files: ['a.txt', 'b.txt'], truncated: true })
+  })
+  it.skipIf(process.getuid?.() === 0)('skips a subfolder it cannot read and lists the rest', () => {
+    const root = makeFolder({ 'a.txt': '', 'locked/b.txt': '', 'open/c.txt': '' })
+    chmodSync(join(root, 'locked'), 0o000)
+    try {
+      expect(listFiles(root).files).toEqual(['a.txt', 'open/c.txt'])
+    } finally {
+      chmodSync(join(root, 'locked'), 0o755)
+    }
   })
 })

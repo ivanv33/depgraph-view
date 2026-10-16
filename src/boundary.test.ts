@@ -41,6 +41,11 @@ export function violations(files: SourceFile[]): string[] {
     const flag = (rule: string) => out.push(`${file}: ${rule}`)
     const test = isTest(file)
     for (const s of specifiers(text)) {
+      // The package naming itself resolves through package.json exports to lib/, around every rule here.
+      if (s === 'depgraph-view' || s.startsWith('depgraph-view/')) {
+        flag(`imports the package itself (${s})`)
+        continue
+      }
       const resolved = isRelative(s) ? resolveFrom(file, s) : null
       if (layer === 'engine') {
         if (resolved !== null) {
@@ -103,6 +108,12 @@ describe('import boundaries', () => {
   it('lets cli import server only', () => {
     expect(violations([{ path: 'src/cli/m.ts', text: "import { startServer } from '../server/start.js'" }])).toEqual([])
     expect(violations([{ path: 'src/cli/m.ts', text: "import { ID_RE } from '../engine/schema.js'" }])).toHaveLength(1)
+  })
+  it('flags the package importing itself by name, in every layer', () => {
+    expect(violations([{ path: 'src/engine/a.ts', text: "import { FRAME } from 'depgraph-view/engine'" }])).toEqual(['src/engine/a.ts: imports the package itself (depgraph-view/engine)'])
+    expect(violations([{ path: 'src/view/a.tsx', text: "import { Graph } from 'depgraph-view'" }])).toEqual(['src/view/a.tsx: imports the package itself (depgraph-view)'])
+    expect(violations([{ path: 'src/server/a.ts', text: "import { Graph } from 'depgraph-view'" }])).toEqual(['src/server/a.ts: imports the package itself (depgraph-view)'])
+    expect(violations([{ path: 'src/cli/a.ts', text: "import { startServer } from 'depgraph-view/server'" }])).toEqual(['src/cli/a.ts: imports the package itself (depgraph-view/server)'])
   })
   it('the source tree keeps every rule', () => {
     expect(violations(readTree('src'))).toEqual([])

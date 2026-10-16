@@ -2,7 +2,7 @@
 
 :root {
   color-scheme: dark;
-  /* The priority mark's size, the one place its numbers live (MARK_EM and MARK_MIN_PX in src/lib, PRIORITY_MARK's 8 x 7
+  /* The priority mark's size, the one place its numbers live (MARK_EM and MARK_MIN_PX in src/engine, PRIORITY_MARK's 8 x 7
      glyph; a test holds them equal). In em of the text the mark sits in: the em resolves where a rule reads them. */
   --mark-h: 0.8em;
   --mark-w: calc(var(--mark-h) * 8 / 7);
@@ -70,7 +70,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   width: 150px;
   overflow: visible;
 }
-/* The circle. Numbers repeat DOT in src/lib/nodeLabel.ts: centre 18px from the slot's left edge; the radius
+/* The circle. Numbers repeat DOT in src/engine/nodeLabel.ts: centre 18px from the slot's left edge; the radius
    is --dot-r (set per label from the due date, 7 far to 16 near, 11 undated); edges meet it 18px above
    or below the slot centre. Priority is not drawn here: it is the bars before the title (.node-prio). */
 .node-label { --dot-r: 11px; }
@@ -161,7 +161,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   white-space: normal;
 }
 .node-label-words { min-width: 0; overflow-wrap: anywhere; }
-/* The priority mark (src/lib/priorityMark.ts): fixed light colours, so it never takes the state colour, and sized in em
+/* The priority mark (src/engine/priorityMark.ts): fixed light colours, so it never takes the state colour, and sized in em
    of the text beside it (--mark-h and the rest, on :root). Nothing about it animates. */
 .priority-mark {
   display: inline-block;
@@ -537,7 +537,6 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .deck-list-mix [data-state='done'], .deck-list-rows [data-state='done'] .deck-list-state { color: #7d8699; }
 .deck-list-close { flex: none; width: 22px; height: 22px; border-radius: 6px; color: #8b95a7; line-height: 1; }
 .deck-list-close:hover { color: #fff; background: rgb(255 255 255 / 0.08); }
-.deck-list-hint { margin: 0; padding: 6px 12px 0; font-size: 11px; color: #ffb454; }
 .deck-list-rows { flex: 1 1 auto; min-height: 0; margin: 0; padding: 4px; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
 .deck-list-rows button {
   display: flex;

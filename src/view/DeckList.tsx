@@ -4,6 +4,7 @@ import PriorityMark from './PriorityMark.js'
 import { freeArea, LIST_SIZE, placeDeckList, type Box, type DeckRow } from '../engine/deckList.js'
 import { PRIORITY_NAME } from '../engine/priorityMark.js'
 import type { NodeState } from '../engine/readiness.js'
+import { FRAME } from '../engine/frame.js'
 
 interface DeckListProps {
   /** The deck's id ("deck:x"); the list's element id is deckListId(deckId), which the deck's label points at. */
@@ -20,8 +21,6 @@ interface DeckListProps {
    * frame's --label-scale) and which hands back the list's place, written after them (Graph.tsx zoomFrame).
    */
   frameRef: RefObject<DeckListFrame | null>
-  /** Link mode is armed: a row links that step, and there is no branch to open. */
-  linking: boolean
   /** The host's chrome over the graph, in window px (insetBoxes): the list stays clear of it. */
   around: { toolbar?: Box; panel?: Box }
   onPick: (id: string) => void
@@ -51,17 +50,24 @@ const rect = (el: Element | null | undefined): Box | undefined => {
   return r.width > 0 || r.height > 0 ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : undefined
 }
 
+/**
+ * The fixed Legend's box in the bottom-left corner (`left-4`, `bottom-16`, its top edge FRAME.legendTop above the
+ * bottom, as the frame keeps it clear), or none on a view narrower than FRAME.legendShowW, where it is hidden.
+ */
+const legendBox = (view: { w: number; h: number }): Box[] =>
+  view.w >= FRAME.legendShowW ? [{ left: 16, top: view.h - FRAME.legendTop, right: FRAME.leftInset, bottom: view.h - 64 }] : []
+
 /** A state's colour as text: the legend's swatch, but done's swatch is too dark to read as text. */
 const textColour = (s: NodeState) => (s === 'done' ? undefined : STATE_SWATCH[s])
 
 /**
- * A deck's steps, listed in place beside it: every one, with its state and date; a row selects that step (or, in link
- * mode, links it). It closes with Escape, a press anywhere else, a second click on the deck, or the focus moving on to
- * another control (the search, say). It sits in the free part of the window (never under the host's toolbar or panel,
- * `around`) and scrolls when it is longer than that; the wheel over it scrolls it and never zooms
+ * A deck's steps, listed in place beside it: every one, with its state and date; a row selects that step. It closes
+ * with Escape, a press anywhere else, a second click on the deck, or the focus moving on to another control (the
+ * search, say). It sits in the free part of the window (never under the host's toolbar or panel,
+ * `around`, nor the Legend) and scrolls when it is longer than that; the wheel over it scrolls it and never zooms
  * the graph.
  */
-export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, linking, around, onPick, onOpenBranch, onClose, onFocusLost }: DeckListProps) {
+export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, around, onPick, onOpenBranch, onClose, onFocusLost }: DeckListProps) {
   const box = useRef<HTMLDivElement>(null)
   const list = useRef<HTMLUListElement>(null)
   const close = useRef(onClose)
@@ -113,11 +119,12 @@ export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, l
       if (!dot || !text) return undefined
       dirty = false
       last = key
-      const free = freeArea({ w: window.innerWidth, h: window.innerHeight }, aroundRef.current)
+      const view = { w: window.innerWidth, h: window.innerHeight }
+      const free = freeArea(view, aroundRef.current)
       // As tall as all its rows: the rows' own height in place of the part of it shown now.
       const rowsEl = list.current
       const want = { w: LIST_SIZE.w, h: el.offsetHeight + (rowsEl ? rowsEl.scrollHeight - rowsEl.clientHeight : 0) }
-      const p = placeDeckList({ dot, text }, want, free, [])
+      const p = placeDeckList({ dot, text }, want, free, legendBox(view))
       return () => {
         el.style.left = `${p.left}px`
         el.style.top = `${p.top}px`
@@ -223,7 +230,6 @@ export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, l
           ✕
         </button>
       </div>
-      {linking && <p className="deck-list-hint">Pick the step to link to.</p>}
       <ul ref={list} className="deck-list-rows">
         {rows.map(r => (
           <li key={r.id}>
@@ -254,7 +260,7 @@ export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, l
           </li>
         ))}
       </ul>
-      {onOpenBranch && !linking && (
+      {onOpenBranch && (
         <button type="button" data-testid="deck-list-open-branch" className="deck-list-open" onClick={onOpenBranch}>
           Draw the whole branch
         </button>

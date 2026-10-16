@@ -1,7 +1,7 @@
-import { symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer, request, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { makeFolder, removeFolders } from './__tests__/folder.js'
 import { contentType, createHandler } from './http.js'
@@ -15,6 +15,21 @@ function rawStatus(url: string, path: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const req = request({ host: '127.0.0.1', port, path, method: 'GET' }, res => {
       res.resume()
+      resolve(res.statusCode ?? 0)
+    })
+    req.on('error', reject)
+    req.end()
+  })
+}
+
+/** The status for GET `/` with the Host header set to `host`, or sent without one when `host` is null. */
+function hostStatus(url: string, host: string | null): Promise<number> {
+  const { port } = new URL(url)
+  return new Promise((resolve, reject) => {
+    const headers = host === null ? {} : { Host: host }
+    const req = request({ host: '127.0.0.1', port, path: '/', method: 'GET', headers, setHost: host !== null }, res => {
+      res.resume()
+      expect(res.headers['x-content-type-options']).toBe('nosniff')
       resolve(res.statusCode ?? 0)
     })
     req.on('error', reject)
@@ -52,6 +67,7 @@ describe('startServer', () => {
     expect(r.status).toBe(200)
     expect(r.headers.get('x-content-type-options')).toBe('nosniff')
     expect(r.headers.get('content-type')).toBe('text/html; charset=utf-8')
+    expect(r.headers.get('content-security-policy')).toBe("default-src 'self'; img-src 'self' blob: data:; connect-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; worker-src 'self' blob:")
   })
   it('serves the graph without folder paths', async () => {
     const body = await (await fetch(`${server.url}api/graph`)).json()
@@ -76,6 +92,23 @@ describe('startServer', () => {
     expect(r.headers.get('content-security-policy')).toContain('sandbox')
     expect(r.headers.get('content-security-policy')).toBe("sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'")
     expect((await fetch(`${server.url}files/a/blob.bin`)).headers.get('content-type')).toBe('application/octet-stream')
+  })
+  it('refuses a request whose Host is not a loopback name', async () => {
+    expect(await hostStatus(server.url, 'evil.example')).toBe(403)
+    expect(await hostStatus(server.url, `evil.example:${server.port}`)).toBe(403)
+    expect(await hostStatus(server.url, '127.0.0.1.evil.example')).toBe(403)
+    expect(await hostStatus(server.url, null)).toBe(403)
+    for (const host of ['127.0.0.1', `127.0.0.1:${server.port}`, 'localhost', `localhost:${server.port}`, '[::1]', `[::1]:${server.port}`])
+      expect(await hostStatus(server.url, host), host).toBe(200)
+  })
+  it('404s node files under .git or node_modules', async () => {
+    for (const rel of ['.git/config', 'node_modules/x.js', 'sub/node_modules/x.js', 'sub/ok.txt']) {
+      mkdirSync(dirname(join(root, 'ctx/a', rel)), { recursive: true })
+      writeFileSync(join(root, 'ctx/a', rel), 'present')
+    }
+    expect((await fetch(`${server.url}files/a/sub/ok.txt`)).status).toBe(200)
+    for (const rel of ['.git/config', 'node_modules/x.js', 'sub/node_modules/x.js', 'sub%2Fnode_modules%2Fx.js'])
+      expect(await rawStatus(server.url, `/files/a/${rel}`), rel).toBe(404)
   })
   it('has no write routes', async () => {
     for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) expect((await fetch(`${server.url}api/graph`, { method })).status).toBe(405)
@@ -186,6 +219,30 @@ describe('createHandler', () => {
     expect(text).toBe('retry: 1000\n\nevent: error\ndata: {"message":"graph.json: \\"bad\\" input"}\n\n')
     await reader.cancel()
     await expect.poll(() => listeners.size).toBe(0)
+  })
+})
+
+describe('createHandler late joiner', () => {
+  let bare: Server
+  afterEach(() => {
+    bare.closeAllConnections()
+    return new Promise<void>(resolve => bare.close(() => resolve()))
+  })
+  it('writes the current error of the source to a client that connects after it', async () => {
+    const source: GraphSource = {
+      current: () => { throw new Error('unused') },
+      on: () => () => {},
+      error: () => 'graph.json: bad',
+      close: async () => {},
+    }
+    bare = createServer(createHandler(source, makeFolder({})))
+    await new Promise<void>(resolve => bare.listen(0, '127.0.0.1', resolve))
+    const reader = (await fetch(`http://127.0.0.1:${(bare.address() as AddressInfo).port}/events`)).body!.getReader()
+    const decoder = new TextDecoder()
+    let text = ''
+    while (!text.includes('event: error')) text += decoder.decode((await reader.read()).value)
+    expect(text).toBe('retry: 1000\n\nevent: error\ndata: {"message":"graph.json: bad"}\n\n')
+    await reader.cancel()
   })
 })
 

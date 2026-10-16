@@ -69,6 +69,24 @@ describe('useLiveGraph', () => {
     expect(result.current.data).toBeNull()
   })
 
+  it('refetches when the stream reopens after a drop, not on its first open', async () => {
+    const events = new FakeEvents()
+    const fetchGraph = vi.fn().mockResolvedValueOnce(payload('One')).mockResolvedValueOnce(payload('Two'))
+    const { result } = renderHook(() => useLiveGraph({ fetchGraph, openEvents: () => events }))
+    await waitFor(() => expect(result.current.data?.plan.name).toBe('One'))
+    act(() => void events.dispatchEvent(new Event('open')))
+    expect(fetchGraph).toHaveBeenCalledTimes(1)
+    act(() => events.emit('error', { message: 'graph.json: bad' }))
+    act(() => void events.dispatchEvent(new Event('error')))
+    // The reopened stream resends a standing error itself, so the old one is cleared before the refetch.
+    act(() => void events.dispatchEvent(new Event('open')))
+    expect(result.current.error).toBeNull()
+    await waitFor(() => expect(result.current.data?.plan.name).toBe('Two'))
+    expect(fetchGraph).toHaveBeenCalledTimes(2)
+    act(() => events.emit('error', { message: 'graph.json: still bad' }))
+    expect(result.current.error).toBe('graph.json: still bad')
+  })
+
   it('closes the event stream on unmount', () => {
     const events = new FakeEvents()
     const fetchGraph = vi.fn().mockResolvedValue(payload('One'))

@@ -55,7 +55,7 @@ export type CardAt = { id: string; x: number; y: number; k: number }
 
 /**
  * A card not yet measured, in card px from its slot's centre: the whole 170 x 44 slot and the 20 px its words may run
- * past the slot's right edge (globals.css .node-label-text). Generous: most titles end well short of it, and the
+ * past the slot's right edge (viewer.css .node-label-text). Generous: most titles end well short of it, and the
  * circle and one line of words take about half its height.
  */
 export const CARD_ESTIMATE: Area = { left: -85, right: 105, top: -22, bottom: 22 }
@@ -88,7 +88,7 @@ export function dropGone(extents: Map<string, Area>, cards: readonly CardAt[]): 
 }
 
 /**
- * How far an overdue step's red ring reaches outside its circle, in the circle's CSS px (globals.css,
+ * How far an overdue step's red ring reaches outside its circle, in the circle's CSS px (viewer.css,
  * `.node-label[data-overdue='true'] .node-dot::after`, `inset: -9px`): a pseudo-element, so no box of it is measured.
  */
 export const OVERDUE_RING = 9

@@ -2,7 +2,7 @@ import { expect, type Page } from '@playwright/test'
 
 /**
  * Waits until the graph is at rest: no camera glide, no drag, no pending resize, and a title fit has measured the view
- * (Graph.tsx writes `data-still` on the graph root from its frame loop, src/lib/stillness.ts). It must also stay true
+ * (Graph.tsx writes `data-still` on the graph root from its frame loop, src/engine/stillness.ts). It must also stay true
  * across two drawn frames, so a flag read just before a move starts does not pass. Replaces a fixed wait for a glide
  * or a fit to end. Call it after the action that moves the view, not before: the flag turns false within a frame of
  * the move, so a call made in the same task may still see the old true; actions that start a glide (a click on a

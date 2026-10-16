@@ -139,7 +139,7 @@ export function placePlate(
  * Where the plate's backing is cut away so each circle it still crosses (`covered`: ids of `others`) shows through it,
  * with the plate's words drawn over it: a hole round each of those boxes that crosses the plate (its circle, a tag), an
  * ellipse `gap` px clear of the box, placed in the plate's own px from its top left (`plate` on screen, at `s` screen px a
- * plate px). As a CSS mask-image whose layers are intersected (globals.css); '' where there is none.
+ * plate px). As a CSS mask-image whose layers are intersected (viewer.css); '' where there is none.
  */
 export function plateHoles(plate: Box, s: number, others: readonly Other[], covered: readonly string[], opts: typeof PLATE = PLATE): string {
   const n = (v: number) => Number(v.toFixed(2))
@@ -242,7 +242,7 @@ export function wrappedAt(seen: readonly Wrapped[], at: number): Wrapped | null 
 }
 
 /**
- * The stylesheet's numbers for the selected step's brackets and plate (globals.css, `.node-label[data-selected]`), in
+ * The stylesheet's numbers for the selected step's brackets and plate (viewer.css, `.node-label[data-selected]`), in
  * card px around a circle centred `centre` px into its card: the brackets `usual` px across on screen (else the circle
  * and `pad` each side), never closer in than the circle's own ring (`ring`, or `overdueRing`) and `least` px on screen
  * each side; the plate starts `gap` px on screen right of them plus its padding (drawn at the words' boost, which keeps

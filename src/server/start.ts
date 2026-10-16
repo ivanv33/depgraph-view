@@ -34,7 +34,8 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   const jsonPath = resolveGraphPath(options.path)
   const watched = options.watch === false ? null : watchedSource(jsonPath)
   const source = watched ?? staticSource(jsonPath)
-  const server = createServer(createHandler(source, options.distDir ?? DEFAULT_DIST))
+  // The handler refuses a missing Host itself (403, nosniff) instead of Node's bare 400.
+  const server = createServer({ requireHostHeader: false }, createHandler(source, options.distDir ?? DEFAULT_DIST))
   try {
     await watched?.ready()
     const wanted = options.port ?? (await findPort(DEFAULT_PORT))

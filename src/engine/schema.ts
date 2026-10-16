@@ -86,7 +86,7 @@ export function validatePlan(input: unknown): string[] {
     }
     const id = raw.id
     if (typeof id !== 'string' || !ID_RE.test(id)) {
-      errors.push(`node ${i}: id "${String(id)}" does not match ^[a-z0-9][a-z0-9-]*$`)
+      errors.push(`node ${i}: id "${String(id)}" does not match ${ID_RE.source}`)
       return
     }
     if (seen.has(id)) {
@@ -173,7 +173,7 @@ export const isInlineEntry = (n: unknown): n is Record<string, unknown> =>
   isRecord(n) && Object.keys(n).some(k => k !== 'id' && k !== 'depends_on')
 
 /**
- * True when any entry is inline. A plan JSON may mix bare and inline entries (the chat or a hand
+ * True when any entry is inline. A plan JSON may mix bare and inline entries (a tool or a hand
  * edit adding a step with its title in the JSON); only one where every entry is inline and no
  * step folder exists is the format before node files (see migratePlan).
  */
@@ -203,7 +203,7 @@ export function validateIndex(input: unknown): string[] {
   input.nodes.forEach((raw, i) => {
     if (!isRecord(raw)) return void errors.push(`node ${i}: must be an object`)
     const id = raw.id
-    if (typeof id !== 'string' || !ID_RE.test(id)) return void errors.push(`node ${i}: id "${String(id)}" does not match ^[a-z0-9][a-z0-9-]*$`)
+    if (typeof id !== 'string' || !ID_RE.test(id)) return void errors.push(`node ${i}: id "${String(id)}" does not match ${ID_RE.source}`)
     if (seen.has(id)) return void errors.push(`node ${i}: duplicate id "${id}"`)
     seen.add(id)
     if (raw.depends_on !== undefined && !isStringArray(raw.depends_on))
@@ -213,7 +213,7 @@ export function validateIndex(input: unknown): string[] {
 }
 
 /**
- * Why the text of a plan file cannot be used, in plain words for the chat (no paths); null when it
+ * Why the text of a plan file cannot be used, in plain words for a person (no paths); null when it
  * can. `stepIds` are the step files in `nodes/`, which the plan lists even without an entry, so a
  * link to one is fine. Checks the JSON, its shape (mixed entries allowed), links and loops.
  */
@@ -248,7 +248,7 @@ export function serializeIndex(plan: Plan): string {
   return JSON.stringify({ name: plan.name, nodes }, null, 2) + '\n'
 }
 
-/** A plan whose JSON shape or node files cannot be used; `errors` go to the browser as a 422. */
+/** A plan whose JSON shape or node files cannot be used; `errors` lists each problem. */
 export class PlanFileError extends Error {
   constructor(readonly errors: string[]) {
     super(errors.join('; '))

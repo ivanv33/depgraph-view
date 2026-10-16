@@ -1,4 +1,4 @@
-// Pure: the selected step in the page's query (`?plan=<slug>&step=<id>`), so a reload (or a link) opens the same step.
+// Pure: the selected step in the page's query (`?step=<id>`), so a reload (or a link) opens the same step.
 import { ID_RE } from './schema.js'
 
 const STEP = 'step'

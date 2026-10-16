@@ -294,7 +294,7 @@ describe('runTitleFit and a deck shown in full while the view moves', () => {
           runTitleFit(labels, labelRanks(nodes, null), 1, true)
           expect(d.dataset.titleFit).toBe('full')
           // under the pointer or the keyboard focus, a deck shown in full keeps it while the view moves: cut, it would
-          // flip to the raised hover style mid-gesture (globals.css); the next still run decides it
+          // flip to the raised hover style mid-gesture (viewer.css); the next still run decides it
           if (held === 'hovered') d.dataset.hovered = 'true'
           if (held === 'focused') d.focus()
           // the view moves (a zoom still easing out): the deck's list now runs over the other step's words
@@ -351,7 +351,7 @@ describe('runTitleFit and a deck shown in full while the view moves, with room',
 })
 
 /**
- * The Group overview of a goal over four areas, one deck under each (e2e/crossLinked.json), as the browser draws it:
+ * The Group overview of a goal over four areas, one deck under each (fixtures/crossLinked.ts), as the browser draws it:
  * the zoom (screen px per layout unit, which is the cards' scale above the card floor) at the 1280x720 fit (252 px
  * between the area columns), one wheel notch out (231 px), two (211 px), and the fit at 1100x740 (207 px).
  */
@@ -360,7 +360,7 @@ const OVERVIEW = { fit1280: 0.7641, out1: 0.6991, out2: 0.6397, fit1100: 0.6276 
 describe('runTitleFit and a deck zoomed out, with room around it', () => {
   it('draws its words at the boost every title takes, so it is not hidden under the floor at an overview zoom', () => {
     // One deck alone: its circle (--dot-r 11) drawn at the zoom k, its title, state line and list at k times their card
-    // size and the boost (what globals.css draws), nothing near it.
+    // size and the boost (what viewer.css draws), nothing near it.
     for (const [name, k] of Object.entries(OVERVIEW)) {
       const b = titleBoost(labelScale(k))
       const s = k * b

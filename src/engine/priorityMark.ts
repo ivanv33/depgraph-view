@@ -26,7 +26,7 @@ export const PRIORITY_MARK = {
   off: 'rgba(139, 149, 167, 0.3)',
 } as const
 
-/** The smallest the graph draws the mark, in screen px, however far out the view is zoomed (globals.css, .node-prio). */
+/** The smallest the graph draws the mark, in screen px, however far out the view is zoomed (viewer.css, .node-prio). */
 export const MARK_MIN_PX = { w: PRIORITY_MARK.w, h: PRIORITY_MARK.h } as const
 
 /** The mark's accessible name. Normal has no mark and no name. */

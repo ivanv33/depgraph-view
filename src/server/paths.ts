@@ -27,7 +27,7 @@ const SKIPPED = new Set(['.git', 'node_modules'])
 /**
  * Every file below `folder` as a POSIX-style relative path, sorted by `<`, cut at `limit`.
  * Skips `.git` and `node_modules` folders and any entry whose realpath leaves `folder`;
- * a folder reached twice through symlinks is walked once.
+ * a folder reached twice through symlinks is walked once; a subfolder that cannot be read is skipped.
  */
 export function listFiles(folder: string, limit = 500): { files: string[]; truncated: boolean } {
   const realFolder = realpathSync(folder)
@@ -36,10 +36,22 @@ export function listFiles(folder: string, limit = 500): { files: string[]; trunc
   const walk = (realDir: string, prefix: string) => {
     if (walked.has(realDir)) return
     walked.add(realDir)
-    for (const name of readdirSync(realDir)) {
+    let names: string[]
+    try {
+      names = readdirSync(realDir)
+    } catch (e) {
+      if (prefix === '') throw e // the node folder itself unreadable is the caller's error
+      return // one unreadable subfolder skips that entry, not the whole list
+    }
+    for (const name of names) {
       const real = realpath(path.join(realDir, name))
       if (real === null || !within(realFolder, real)) continue
-      const stat = statSync(real)
+      let stat
+      try {
+        stat = statSync(real)
+      } catch {
+        continue // gone or unreadable between readdir and stat
+      }
       if (stat.isDirectory()) {
         if (!SKIPPED.has(name)) walk(real, `${prefix}${name}/`)
       } else if (stat.isFile()) {

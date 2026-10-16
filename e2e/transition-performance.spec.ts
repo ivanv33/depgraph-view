@@ -162,11 +162,11 @@ for (const vp of [
       const s = await timed(page, 'add', vp, async () => {
         // the eight new md files first, then graph.json naming them (the shape writeFixture writes)
         const plan = bigPlan(8)
-        for (const s of plan.nodes.filter(s => /^n\d+$/.test(s.id))) {
-          await mkdir(join(dir, 'nodes', s.id), { recursive: true })
-          await writeFile(join(dir, 'nodes', s.id, `${s.id}.md`), `---\ntitle: ${s.title}\nstatus: ${s.status}\n---\n`)
+        for (const step of plan.nodes.filter(n => /^n\d+$/.test(n.id))) {
+          await mkdir(join(dir, 'nodes', step.id), { recursive: true })
+          await writeFile(join(dir, 'nodes', step.id, `${step.id}.md`), `---\ntitle: ${step.title}\nstatus: ${step.status}\n---\n`)
         }
-        const nodes = plan.nodes.map(s => ({ id: s.id, md: `nodes/${s.id}/${s.id}.md`, dir: `nodes/${s.id}`, depends_on: s.depends_on }))
+        const nodes = plan.nodes.map(n => ({ id: n.id, md: `nodes/${n.id}/${n.id}.md`, dir: `nodes/${n.id}`, depends_on: n.depends_on }))
         await writeFile(join(dir, 'graph.json'), JSON.stringify({ name: PLAN_NAME, nodes }, null, 2))
         await expect(page.getByTestId('node-label')).toHaveCount(335, { timeout: 30000 })
       })

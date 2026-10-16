@@ -80,6 +80,8 @@ export function loadGraph(rootDir: string, json: unknown): LoadResult {
   const out: LoadResult = { plan: { name, nodes: [] }, resources: {}, bodies: {}, folders: {}, mdFiles: {}, warnings: [] }
   const warn = (id: string, text: string) => out.warnings.push(`node "${id}": ${text}`)
   const kept: PlanNode[] = []
+  // Nodes that share a folder share its one walk.
+  const listed = new Map<string, ReturnType<typeof listFiles>>()
   for (const { id, md, dir, dependsOn, common } of entries) {
     const mdPath = locate(root, realRoot, md, 'file')
     if (mdPath === 'outside') { warn(id, 'md is outside the folder'); continue }
@@ -107,7 +109,9 @@ export function loadGraph(rootDir: string, json: unknown): LoadResult {
       out.resources[id] = []
       warn(id, 'dir not found')
     } else {
-      const { files, truncated } = listFiles(folder, FILE_LIMIT)
+      let walk = listed.get(folder)
+      if (walk === undefined) listed.set(folder, (walk = listFiles(folder, FILE_LIMIT)))
+      const { files, truncated } = walk
       out.resources[id] = files
       out.folders[id] = folder
       if (truncated) warn(id, `more than ${FILE_LIMIT} files, list cut`)
@@ -136,7 +140,10 @@ export function resolveGraphPath(p: string): string {
   if (!isDir) return abs
   const isFile = (name: string) => statSync(path.join(abs, name), { throwIfNoEntry: false })?.isFile() === true
   const found = readdirSync(abs).filter(name => name.endsWith('.json') && isFile(name))
-  if (found.length !== 1) throw new GraphError(`${p}: expected exactly one .json file at the top of the folder, found ${found.length}`)
+  if (found.length !== 1) {
+    const names = found.length ? `: ${found.sort().join(', ')}` : ''
+    throw new GraphError(`${p}: expected exactly one .json file at the top of the folder, found ${found.length}${names}`)
+  }
   return path.join(abs, found[0])
 }
 

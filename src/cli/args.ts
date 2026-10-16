@@ -15,15 +15,15 @@ export const USAGE = `usage: depgraph-view <path> [--port N] [--open] [--no-watc
 
 const MAX_PORT = 65535
 
-/** The command line after the program name, or `{ error }` with a message for stderr. */
-export function parseArgs(argv: string[]): CliArgs | { error: string } {
+/** The command line after the program name, `{ help }` with the usage for stdout, or `{ error }` with a message for stderr. */
+export function parseArgs(argv: string[]): CliArgs | { help: string } | { error: string } {
   let path: string | undefined
   let port: number | undefined
   let open = false
   let watch = true
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
-    if (a === '-h' || a === '--help') return { error: USAGE }
+    if (a === '-h' || a === '--help') return { help: USAGE }
     if (a === '--open') open = true
     else if (a === '--no-watch') watch = false
     else if (a === '--port') {

@@ -27,6 +27,14 @@ describe('Markdown', () => {
     expect(site.getAttribute('target')).toBe('_blank')
     expect(site.getAttribute('rel')).toBe('noopener noreferrer')
   })
+  it('keeps in-page #fragment links and renders other unresolved links as plain text', () => {
+    render(<Markdown nodeId="a" markdown={'[top](#top) [host](//host/x) [up](../x.md) [rooted](/rooted)'} />)
+    expect(screen.getByRole('link', { name: 'top' }).getAttribute('href')).toBe('#top')
+    for (const name of ['host', 'up', 'rooted']) {
+      expect(screen.queryByRole('link', { name }), name).toBeNull()
+      expect(screen.getByText(name).tagName, name).toBe('SPAN')
+    }
+  })
   it('drops javascript: urls and raw html', () => {
     const { container } = render(<Markdown nodeId="a" markdown={'[bad](javascript:alert(1))\n\n<b data-raw>raw</b>'} />)
     expect(container.innerHTML).not.toContain('javascript:')

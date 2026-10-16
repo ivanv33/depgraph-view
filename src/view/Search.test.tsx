@@ -71,6 +71,15 @@ describe('Search', () => {
     expect(screen.getByTestId('search')).toBe(box)
     expect(onPick).not.toHaveBeenCalled()
   })
+  it('keeps an empty status region before anything is typed and fills it while there is a query', () => {
+    render(<Search plan={plan} today="2026-10-16" onPick={() => {}} />)
+    const hint = screen.getByTestId('search-hint')
+    expect(hint.getAttribute('role')).toBe('status')
+    expect(hint.textContent).toBe('')
+    fireEvent.change(screen.getByTestId('search'), { target: { value: 'bed' } })
+    expect(screen.getByTestId('search-hint')).toBe(hint)
+    expect(hint.textContent).not.toBe('')
+  })
   it('hides the results when the focus leaves the box, keeps the text, and shows them again on focus', () => {
     render(<Search plan={plan} today="2026-10-16" onPick={() => {}} />)
     const box = screen.getByTestId('search') as HTMLInputElement
@@ -80,7 +89,9 @@ describe('Search', () => {
     fireEvent.blur(box)
     expect(options()).toHaveLength(0)
     expect(box.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByTestId('search-hint')).toBeNull()
+    // the live region stays in the page (a screen reader only announces changes to a region it already saw), empty
+    expect(screen.getByTestId('search-hint').textContent).toBe('')
+    expect(screen.getByTestId('search-hint').getAttribute('aria-live')).toBe('polite')
     expect(box.value).toBe('bed')
     fireEvent.focus(box)
     expect(options().map(o => o.getAttribute('data-node-id'))).toEqual(['build-bed'])

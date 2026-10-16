@@ -1,8 +1,14 @@
 import { symlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeFolder, removeFolders } from './__tests__/folder.js'
 import { GraphError, loadGraph, loadGraphFile, resolveGraphPath } from './loader.js'
+import { listFiles } from './paths.js'
+
+vi.mock('./paths.js', async importOriginal => {
+  const real = await importOriginal<typeof import('./paths.js')>()
+  return { ...real, listFiles: vi.fn(real.listFiles) }
+})
 
 afterEach(() => removeFolders())
 
@@ -120,11 +126,23 @@ describe('loadGraph', () => {
   })
 })
 
+describe('loadGraph folder walks', () => {
+  it('walks a folder shared by several nodes once', () => {
+    const root = makeFolder({ 'a.md': '', 'b.md': '', 'ctx/notes.txt': '' })
+    vi.mocked(listFiles).mockClear()
+    const r = loadGraph(root, { name: 'G', nodes: [{ id: 'a', md: 'a.md', dir: 'ctx' }, { id: 'b', md: 'b.md', dir: 'ctx' }] })
+    expect(r.resources.a).toEqual(['notes.txt'])
+    expect(r.resources.b).toEqual(r.resources.a)
+    expect(listFiles).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('resolveGraphPath', () => {
   it('resolveGraphPath takes a folder with exactly one top-level json', () => {
     const root = makeFolder({ 'plan.json': '{}', 'nodes/x.json': '{}' })
     expect(resolveGraphPath(root)).toBe(join(root, 'plan.json'))
-    expect(() => resolveGraphPath(makeFolder({ 'a.json': '{}', 'b.json': '{}' }))).toThrow(/exactly one/)
+    expect(() => resolveGraphPath(makeFolder({ 'a.json': '{}', 'b.json': '{}' }))).toThrow(/exactly one .*found 2: a\.json, b\.json$/)
+    expect(() => resolveGraphPath(makeFolder({ 'notes.txt': '' }))).toThrow(/found 0$/)
     expect(() => resolveGraphPath(join(root, 'missing.json'))).toThrow(GraphError)
   })
   it('takes a json file path as it is', () => {

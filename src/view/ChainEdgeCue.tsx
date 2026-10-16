@@ -57,7 +57,6 @@ export default function ChainEdgeCues({
   tickRef,
   labels,
   boxes,
-  panelState = '',
   words,
 }: {
   active: boolean
@@ -65,10 +64,8 @@ export default function ChainEdgeCues({
   scene: RefObject<() => CueScene | null>
   tickRef: RefObject<(() => void) | null>
   labels: ReadonlyMap<string, HTMLElement>
-  /** The host's chrome over the graph, in graph px (insetBoxes): kept clear, and a step under it counts as past the edge. */
+  /** The host's chrome over the graph, in window px (insetBoxes): kept clear, and a step under it counts as past the edge. */
   boxes: { toolbar?: Box; panel?: Box }
-  /** Changes when the host's panel opens or closes: the cues are placed and the cards measured again. */
-  panelState?: string
   /**
    * A count that changes whenever the cards' words may have changed with no view move (the graph's title fit ran: a
    * plan edit, a font swapped in, a title cut or shown): read on the frame tick, it asks for the cards to be measured
@@ -94,7 +91,7 @@ export default function ChainEdgeCues({
     inputs.current = { active, area, panel, toolbar }
     lastScene.current = '' // read again on the next frame
     restKey.current = '' // and measured again once it rests: the area's edges, and so the cards near them, moved
-  }, [active, area, panel, toolbar, panelState])
+  }, [active, area, panel, toolbar])
   useEffect(() => {
     // read when the view has rested REST_MS, never on the frame tick: the page is laid out once for these reads
     const measureCards = () => {

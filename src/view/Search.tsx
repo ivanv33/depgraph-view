@@ -46,6 +46,7 @@ export default function Search({ plan, today, onPick }: SearchProps) {
   }
 
   // Said politely to a screen reader as it changes, and shown under the list.
+  const hinted = !!query.trim() && !away
   const status = shown.length === 0 ? 'No step matches' : shown.length === 1 ? '1 step matches' : `${shown.length} steps match`
 
   return (
@@ -124,14 +125,11 @@ export default function Search({ plan, today, onPick }: SearchProps) {
           )
         })}
       </ul>
-      {query.trim() && !away && (
-        <>
-          <p data-testid="search-hint" role="status" aria-live="polite" className="mt-1 px-1 text-[11px] text-white/40">
-            {status}
-          </p>
-          <p className="mt-0.5 px-1 text-[11px] text-white/40">↑↓ choose · Enter selects · Esc clears</p>
-        </>
-      )}
+      {/* Always in the page: a screen reader announces changes only to a live region it already saw. */}
+      <p data-testid="search-hint" role="status" aria-live="polite" className={hinted ? 'mt-1 px-1 text-[11px] text-white/40' : 'sr-only'}>
+        {hinted ? status : ''}
+      </p>
+      {hinted && <p className="mt-0.5 px-1 text-[11px] text-white/40">↑↓ choose · Enter selects · Esc clears</p>}
     </div>
   )
 }

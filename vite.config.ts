@@ -4,6 +4,8 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   root: 'src/view',
+  // Relative URLs: the page and viewer.css work wherever they are served from, not only at `/`.
+  base: './',
   plugins: [react(), tailwindcss()],
   build: {
     outDir: '../../dist',

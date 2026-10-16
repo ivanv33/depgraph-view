@@ -148,7 +148,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     css.sortObjects = false
     // The layer clips the labels to the window but must never scroll: under its own overflow:hidden the browser scrolls
     // it to show a focused label that lies outside (Tab, or a click whose frame moves the step out), and every label
-    // is then drawn off its circle, some over the HUD and the panel. A clip is no scroll container.
+    // is then drawn off its circle, some over the host's chrome and the panel. A clip is no scroll container.
     css.domElement.style.overflow = 'clip'
     return [css]
   })
@@ -464,7 +464,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   // While the user drags, the camera is theirs: framing waits.
   const dragging = useRef(false)
   // Set when the user zooms or pans (a wheel notch counts; a press that moves nothing does not), cleared by every
-  // automatic frame, F and Shift+F: until then the bottom card growing or the layout shifting under the selection
+  // automatic frame and the host's fit-all (`fitAll`): until then the layout shifting under the selection
   // leaves the camera where the user put it.
   const [userMoved] = useState(userMoveTracker)
   const fitAfterDrag = useRef<() => void>(() => {})
@@ -609,7 +609,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   useEffect(() => {
     doneDecks.current = { sel: selectedId, ids: new Set([...view.decks.values()].filter(d => d.done).map(d => d.id)) }
   }, [view, selectedId])
-  // Every drawn card with its size, as the arrow keys lay it out too (layoutInput).
+  // Every drawn card with its size (layoutInput).
   const drawn = useMemo(() => layoutInput(plan, view, today), [plan, view, today])
   const structure = structureKey(drawn) + drawn.map(n => `${n.h ?? ''}/${n.w ?? ''}/${n.tail ?? ''}`).join(',')
   // (counted and timed for the glide meter: once per change)
@@ -621,7 +621,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   // The first time there is a plan, frame its bounding box; after that the camera is the user's, except
   // that a structure change re-frames (below).
   const fitter = useRef<() => void>(() => {})
-  // Once a whole-plan frame the app makes (the load's, F, a resize, closing the selection, a change in what is drawn)
+  // Once a whole-plan frame (the load's, the host's fit-all, a resize, closing the selection, a change in what is drawn)
   // has landed, the next measuring title fit decides afresh (runTitleFit's `fresh`): the titles were fitted at the
   // camera before that frame, and what they showed there is no slack to keep at the zoom the frame lands at.
   const fitFresh = useRef(false)
@@ -788,7 +788,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       const fg = fgRef.current
       const viewSize = sizeRef.current
       // Before the engine first stops the window size and the camera are not settled yet: wait for it; while a resize
-      // is still going, wait for its end (it frames then, once, with the bottom card as it re-wrapped). A selection
+      // is still going, wait for its end (it frames then, once, at the settled size). A selection
       // made while the user drags is not framed, and counts as seen so the camera does not jump to it later. A window
       // is resizing too while its size is not the last one this graph saw (the page can react to a resize, the panel
       // collapsing on a narrow window, before this graph's own listener runs), or a settled burst has not rendered yet.
@@ -1025,7 +1025,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
 
   // How one edge is drawn now, its laid-out waypoints with it. A new function only when what an edge looks like
   // changes: the graph library builds every line again whenever it gets a new one (linkThreeObject below), so a render
-  // that changes none of this (a camera move, the bottom card's height) builds none.
+  // that changes none of this (a camera move) builds none.
   const edgeDraw = useCallback(
     (source: string, target: string): { points: Pt[]; draw: EdgeDraw } | null => {
       const edge = edgeByKey.get(edgeKey(source, target))
@@ -1320,7 +1320,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     if (to) moveCamera(to.position, to.lookAt, FRAME.fitMs)
   }
 
-  // The label whose circle the pointer is on shows its words whole if they are cut or hidden (data-hovered, globals.css).
+  // The label whose circle the pointer is on shows its words whole if they are cut or hidden (data-hovered, viewer.css).
   const revealed = useRef<HTMLElement | null>(null)
   const reveal = (el: HTMLElement | null) => {
     if (revealed.current === el) return
@@ -1431,7 +1431,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       onFocus={e => onFocusChange(e, true)}
       onBlur={e => onFocusChange(e, false)}
     >
-      <ChainEdgeCues active={selectedId !== null} area={cueArea} scene={cueScene} tickRef={cueTick} labels={labels} boxes={chrome} panelState={String(insets.right)} words={fitRuns} />
+      <ChainEdgeCues active={selectedId !== null} area={cueArea} scene={cueScene} tickRef={cueTick} labels={labels} boxes={chrome} words={fitRuns} />
       <ForceGraph3D<GraphNode, GraphLink>
         ref={fgRef}
         width={size.w}
@@ -1463,7 +1463,6 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
           rows={listRows}
           anchor={listAnchor}
           frameRef={listFrame}
-          linking={false}
           around={chrome}
           onPick={id => {
             // The focus goes on to the step picked, once it is drawn.

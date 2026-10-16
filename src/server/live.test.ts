@@ -82,7 +82,7 @@ describe('watchedSource', () => {
     }
   })
   it('rejects ready when the watcher fails before it is ready', async () => {
-    const locked = join(root, 'ctx/a/node_modules') // the loader skips it, chokidar does not
+    const locked = join(root, 'ctx/a/locked') // the loader skips an unreadable folder, chokidar does not
     mkdirSync(locked)
     chmodSync(locked, 0o000)
     const failing = watchedSource(jsonPath)
@@ -152,6 +152,50 @@ describe('watchedSource', () => {
     await pause(300)
     writeFileSync(join(root, 'ctx/a/sub/late.txt'), 'planted after')
     await expect.poll(() => s.current().result.resources.a, { timeout: 3000 }).toContain('sub/late.txt')
+  })
+  it('keeps watching a node folder inside a dropped node folder', async () => {
+    mkdirSync(join(root, 'ctx/a/sub'))
+    writeFileSync(join(root, 'ctx/a/sub/s.md'), '---\ntitle: Inner\n---\n')
+    writeFileSync(jsonPath, graph([{ id: 'a', md: 'a.md', dir: 'ctx/a' }, { id: 's', md: 'ctx/a/sub/s.md' }]))
+    await expect.poll(() => s.current().result.plan.nodes.length, { timeout: 3000 }).toBe(2)
+    await pause(300)
+    writeFileSync(jsonPath, graph([{ id: 's', md: 'ctx/a/sub/s.md' }]))
+    await expect.poll(() => s.current().result.plan.nodes.length, { timeout: 3000 }).toBe(1)
+    await pause(300)
+    writeFileSync(join(root, 'ctx/a/sub/new.txt'), 'still watched')
+    await expect.poll(() => s.current().result.resources.s, { timeout: 3000 }).toContain('new.txt')
+  })
+  it('sends nothing for a write under node_modules or .git in a node folder', async () => {
+    mkdirSync(join(root, 'ctx/a/node_modules/pkg'), { recursive: true })
+    mkdirSync(join(root, 'ctx/a/.git'), { recursive: true })
+    await pause(300)
+    const events = collect(s, 600)
+    writeFileSync(join(root, 'ctx/a/node_modules/pkg/x.js'), 'module.exports = 1')
+    writeFileSync(join(root, 'ctx/a/.git/HEAD'), 'ref: refs/heads/main')
+    expect(await events).toEqual([])
+  })
+  it('watches a plan that itself lives under a node_modules folder', async () => {
+    const nested = makeFolder({
+      'node_modules/plan/graph.json': graph([{ id: 'a', md: 'a.md' }]),
+      'node_modules/plan/a.md': '---\ntitle: Inside\n---\n',
+    })
+    const inner = watchedSource(join(nested, 'node_modules/plan/graph.json'))
+    try {
+      await settle(inner)
+      writeFileSync(join(nested, 'node_modules/plan/a.md'), '---\ntitle: Edited\n---\n')
+      expect((await nextEvent(inner)).type).toBe('reload')
+    } finally {
+      await inner.close()
+    }
+  })
+  it('holds the last reload error until a good reload clears it', async () => {
+    expect(s.error?.()).toBeNull()
+    writeFileSync(jsonPath, '{ nope')
+    await nextEvent(s)
+    expect(s.error?.()).toEqual(expect.stringContaining('graph.json'))
+    writeFileSync(jsonPath, graph([{ id: 'a', md: 'a.md', dir: 'ctx/a' }]))
+    expect((await nextEvent(s)).type).toBe('reload')
+    expect(s.error?.()).toBeNull()
   })
   it('a file added to a node folder updates resources', async () => {
     writeFileSync(join(root, 'ctx/a/new.txt'), 'south row next')

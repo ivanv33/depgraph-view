@@ -33,7 +33,10 @@ export default function Markdown({ markdown, nodeId }: MarkdownProps) {
                 </a>
               )
             }
-            return <a href={href}>{children}</a>
+            // An in-page fragment stays a link; anything else (`//host/x`, `/rooted`, `../other.md`) would navigate
+            // the viewer tab away, so it shows as text.
+            if (href?.startsWith('#')) return <a href={href}>{children}</a>
+            return <span>{children}</span>
           },
         }}
       >

@@ -30,6 +30,7 @@ export function contentType(file: string): string {
   return TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream'
 }
 
+const PAGE_CSP = "default-src 'self'; img-src 'self' blob: data:; connect-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; worker-src 'self' blob:"
 const FILE_CSP = "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
 const IMMUTABLE = 'public, max-age=31536000, immutable'
 
@@ -72,16 +73,30 @@ function sendEvents(source: GraphSource, req: IncomingMessage, res: ServerRespon
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
   if (req.method === 'HEAD') return void res.end()
   res.write('retry: 1000\n\n')
+  // A page that joins while the graph is broken sees the banner without waiting for the next change.
+  const error = source.error?.() ?? null
+  if (error !== null) res.write(frame({ type: 'error', message: error }))
   const off = source.on(e => res.write(frame(e)))
   res.on('close', off)
 }
 
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
+
+/** Whether the Host header names this machine: `127.0.0.1`, `localhost` or `[::1]`, with or without a port. */
+function loopbackHost(host: string | undefined): boolean {
+  if (host === undefined) return false
+  const name = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host.split(':', 1)[0]
+  return LOOPBACK_HOSTS.has(name.toLowerCase())
+}
+
 function route(source: GraphSource, distDir: string, req: IncomingMessage, res: ServerResponse): void {
+  // DNS rebinding: a page on another origin that resolves its name to 127.0.0.1 still sends its own Host.
+  if (!loopbackHost(req.headers.host)) return send(req, res, 403, { 'Content-Type': TEXT }, 'Forbidden\n')
   if (req.method !== 'GET' && req.method !== 'HEAD')
     return send(req, res, 405, { 'Content-Type': TEXT, Allow: 'GET, HEAD' }, 'Method not allowed\n')
   // The raw path, not a WHATWG URL: URL parsing would resolve `..` and `%2e%2e` before the guard sees them.
   const rawPath = (req.url ?? '/').split(/[?#]/, 1)[0]
-  if (rawPath === '/') return sendFile(req, res, insideRoot(distDir, 'index.html'), { 'Content-Type': contentType('index.html'), 'Cache-Control': 'no-cache' })
+  if (rawPath === '/') return sendFile(req, res, insideRoot(distDir, 'index.html'), { 'Content-Type': contentType('index.html'), 'Cache-Control': 'no-cache', 'Content-Security-Policy': PAGE_CSP })
   if (rawPath === '/viewer.css') return sendFile(req, res, insideRoot(distDir, 'viewer.css'), { 'Content-Type': contentType('viewer.css') })
   if (rawPath === '/api/graph') {
     const { result, generatedAt } = source.current()
@@ -103,6 +118,8 @@ function route(source: GraphSource, distDir: string, req: IncomingMessage, res: 
     const rel = decodeSegments(relSegments)
     const folders = source.current().result.folders
     if (decodedId === null || rel === null || !Object.hasOwn(folders, decodedId)) return notFound(req, res)
+    // The same folders the resources list skips.
+    if (rel.split(/[\\/]/).some(seg => seg === '.git' || seg === 'node_modules')) return notFound(req, res)
     const type = contentType(rel)
     return sendFile(req, res, insideRoot(folders[decodedId], rel), {
       'Content-Type': type.startsWith('text/html') ? TEXT : type,

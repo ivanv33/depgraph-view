@@ -5,7 +5,7 @@ import { MARK_MIN_PX, PRIORITY_MARK, PRIORITY_NAME, createPriorityMark } from '.
 import type { NodeState } from './readiness.js'
 
 /**
- * The round node, in px at scale 1. globals.css repeats these (.node-dot); keep them in step.
+ * The round node, in px at scale 1. viewer.css repeats these (.node-dot); keep them in step.
  * `cx` is the circle's centre from the slot's left edge, `r` its default radius (the real one follows
  * the due date, see SIZE in due.ts), `reach` how far above or below the slot centre an edge meets it
  * (the same for every size; the biggest dot, 16, fits inside).
@@ -58,14 +58,14 @@ function elsewhereText(e: NonNullable<LabelView['elsewhere']>): string {
 }
 
 /**
- * A card's text block in px at scale 1, from globals.css (.node-label-text; keep in step): it starts 40px in from the
+ * A card's text block in px at scale 1, from viewer.css (.node-label-text; keep in step): it starts 40px in from the
  * slot's left edge, is 150px wide, and the title is 13px. The priority mark sits inside it, before the title's words, so
  * the words wrap beside the mark and the block never widens: TEXT_RIGHT is as far right as any title reaches, mark or no mark.
  */
 export const LABEL_TEXT = { left: 40, width: 150, font: 13 } as const
 export const TEXT_RIGHT = LABEL_TEXT.left + LABEL_TEXT.width
 
-/** The mark's height and the gap after it, in em of the title (globals.css, .node-prio; keep in step). Its width follows the glyph. */
+/** The mark's height and the gap after it, in em of the title (viewer.css, .node-prio; keep in step). Its width follows the glyph. */
 export const MARK_EM = { h: 0.8, gap: 0.35 } as const
 
 /**
@@ -86,7 +86,7 @@ export function markRoom(priority: Priority, zoom: number, font: number = LABEL_
 export const DECK_FAN = { max: 5, dx: 6, dy: 2 } as const
 
 /**
- * A deck's text block in px at scale 1, from globals.css (keep in step): the title line (13px x 1.2), the state line
+ * A deck's text block in px at scale 1, from viewer.css (keep in step): the title line (13px x 1.2), the state line
  * (10px x 1.25, reserved whether or not the states are mixed), the due line (10px x 1.2, reserved whether or not there
  * is a date), the list's top margin, one line per listed member (10px x 1.25 plus 2px padding; titles are cut to one
  * line) and the "+N more" pill.
@@ -211,7 +211,7 @@ export function createLabelElement(id: string, onPick: OnPick): HTMLDivElement {
   const text = document.createElement('span')
   text.className = 'node-label-text'
   text.append(title, due, idLine)
-  // The selection mark: corner brackets around the circle that keep a fixed size on screen at any zoom (globals.css
+  // The selection mark: corner brackets around the circle that keep a fixed size on screen at any zoom (viewer.css
   // shows it only on the selected step). Drawn, never read: the selection is data-selected on the label.
   const mark = document.createElement('span')
   mark.className = 'node-mark'
@@ -267,12 +267,12 @@ export function renderLabel(el: HTMLElement, view: LabelView): void {
   // The tooltip says the date as the label does (see dueLabel), whole where the line is cut short.
   const tip = view.due ? `${name} (due ${view.due.text}${view.due.inherited ? `, from ${view.due.from}` : ''})` : name
   el.title = away ? `${tip}\n${elsewhereText(away)}` : tip
-  // Needs drawn elsewhere: "+N" under the circle (globals.css), so the step does not look like one that needs nothing.
+  // Needs drawn elsewhere: "+N" under the circle (viewer.css), so the step does not look like one that needs nothing.
   if (away) el.dataset.elsewhere = String(away.count)
   else delete el.dataset.elsewhere
   const cue = el.querySelector('.node-label-elsewhere')
   if (cue) cue.textContent = away ? `+${away.count}` : ''
-  // A date taken from a step that needs this one reads "by <date>" in italics (globals.css).
+  // A date taken from a step that needs this one reads "by <date>" in italics (viewer.css).
   if (view.due?.inherited) el.dataset.dueInherited = 'true'
   else delete el.dataset.dueInherited
   el.dataset.status = view.status

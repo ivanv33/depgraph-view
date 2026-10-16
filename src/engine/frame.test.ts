@@ -604,6 +604,15 @@ describe('narrow views', () => {
     expect(frameInsets({ w: 1440, h: 900 }, { right: 416 }).right).toBe(416)
     expect(frameInsets({ w: 300, h: 800 }, { right: 0 }).right).toBe(0)
   })
+  it('merges the host strips with the frame floors: top at least topInset, left at least the legend strip, right shrinking', () => {
+    // a host top below 72 is raised to 72; one above it wins
+    expect(frameInsets({ w: 1280, h: 720 }, { top: 40 }).top).toBe(FRAME.topInset)
+    expect(frameInsets({ w: 1280, h: 720 }, { top: 120 }).top).toBe(120)
+    // on a wide view with the legend, a host left below 240 is raised to 240
+    expect(frameInsets({ w: 1280, h: 720 }, { left: 100 }, true).left).toBe(FRAME.leftInset)
+    // a host left past 60% of the width is kept whole, and the right strip shrinks to nothing
+    expect(frameInsets({ w: 1000, h: 800 }, { left: 700, right: 416 }, true)).toMatchObject({ left: 700, right: 0 })
+  })
 
   it('frames a chain at 400 px wide with the panel open: a finite position with the focus inside the view', () => {
     const view = { w: 400, h: 800 }
@@ -641,7 +650,7 @@ describe('narrow views', () => {
     expect(frameInsets({ w: 800, h: 740 }, { right: 0, bottom: 400 }, true).bottom).toBe(400)
     // a view too short for that keeps the left strip clear instead
     expect(frameInsets({ w: 800, h: 500 }, { right: 0 }, true)).toEqual({ top: 72, bottom: FRAME.bottomInset, left: FRAME.leftInset, right: 0 })
-    // the open ready-now list alone (a step selected) keeps its strip at the left on a wide view and none on a narrow one
+    // a host left strip alone (a step selected) keeps its strip at the left on a wide view and none on a narrow one
     expect(frameInsets({ w: 1280, h: 720 }, { right: 0, left: 240 }, false).left).toBe(FRAME.leftInset)
     expect(frameInsets({ w: 800, h: 740 }, { right: 0, bottom: 250 }, false)).toEqual({ top: 72, bottom: 250, left: 0, right: 0 })
     // below the width where the legend hides, nothing is kept for it
@@ -1083,7 +1092,7 @@ describe('sizeSettler', () => {
   })
 })
 
-describe('the open ready-now list under the legend width', () => {
+describe('the host left strip under the legend width', () => {
   it('keeps its column clear as the left strip, with or without the legend', () => {
     expect(frameInsets({ w: 600, h: 740 }, { right: 0, bottom: 170, left: 296 }, true).left).toBe(296)
     expect(frameInsets({ w: 600, h: 740 }, { right: 0, bottom: 170, left: 296 }, false).left).toBe(296)
@@ -1269,7 +1278,7 @@ describe('the whole-plan frame counts the steps drawn larger for a soon due date
     return { layout, pts }
   }
   // Where a step's title, drawn `scale` times its size, ends on screen: its circle stays where an undated one's would be
-  // (globals.css, .node-card's left), and its text block (boosted) runs right of it at the card's drawn size.
+  // (viewer.css, .node-card's left), and its text block (boosted) runs right of it at the card's drawn size.
   const titleRight = (f: Frame, view: { w: number; h: number }, cx: number, scale: number) => {
     const ppu = pxPerUnit(f.position.z, fov, view.h)
     const k = labelScale(ppu)
@@ -1630,7 +1639,7 @@ describe("the selection's frame keeps the selected step as drawn inside the free
     { x: x - cardW / 2, y: y - cardH / 2 },
     { x: x + cardW / 2, y: y + cardH / 2 },
   ]
-  // The selected step as the stylesheet draws it (globals.css, .node-label[data-selected]): brackets the usual 44 px
+  // The selected step as the stylesheet draws it (viewer.css, .node-label[data-selected]): brackets the usual 44 px
   // square on its circle, its plate right of them, as wide as its longest words (150 card px) at their boost.
   // Drawn `scale` times its size with a circle of radius `r` (a near-due step: NEAR.near and 16 px).
   const drawnBox = (f: Frame, view: { w: number; h: number }, at: { x: number; y: number }, scale = 1, r: number = DOT.r) => {
@@ -1747,7 +1756,7 @@ describe("the selection's frame keeps the selected step as drawn inside the free
 })
 
 describe('selectedReach', () => {
-  // Hand-worked from globals.css (.node-label[data-selected]): at k=1, scale 1.3 (z 1.3) and a 16 px circle the
+  // Hand-worked from viewer.css (.node-label[data-selected]): at k=1, scale 1.3 (z 1.3) and a 16 px circle the
   // brackets are max(44/1.3, 2*16+20) = 52 card px, 33.8 px each side on screen; the circle is 67 px left of the slot's
   // centre; the plate starts at 18+26+3/1.3+6 = 52.31 card px and ends 156 later, (52.31-18+156)*1.3-67 = 180.4 px right.
   // Undated at k=1: brackets max(44, 2*11+20) = 44 px, 22 each side; the circle 85-18 = 67 px left of the slot's

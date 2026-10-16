@@ -23,6 +23,7 @@ describe('resolveRelative', () => {
     expect(resolveRelative('a', 'my%20sketch.png')).toBe('/files/a/my%20sketch.png')
     expect(resolveRelative('a', '%2e%2e/x')).toBeNull()
     expect(resolveRelative('a', 'bad%zz.png')).toBeNull()
+    for (const h of ['..\\x', 'img%2fx.png', '%5c..']) expect(resolveRelative('a', h), h).toBeNull()
   })
   it('drops a query and rejects an href naming no file', () => {
     expect(resolveRelative('a', 'x.png?v=2')).toBe('/files/a/x.png')

@@ -16,8 +16,8 @@ describe('parseArgs', () => {
       expect(parseArgs(a)).toHaveProperty('error')
   })
   it('answers -h and --help with the usage', () => {
-    expect(parseArgs(['-h'])).toEqual({ error: USAGE })
-    expect(parseArgs(['p.json', '--help'])).toEqual({ error: USAGE })
+    expect(parseArgs(['-h'])).toEqual({ help: USAGE })
+    expect(parseArgs(['p.json', '--help'])).toEqual({ help: USAGE })
   })
 })
 

@@ -8,12 +8,17 @@ export interface Io {
 }
 
 /**
- * Runs `depgraph-view` with `argv` (the arguments after the program name). Code 2 on a usage error,
- * 1 when the server cannot start, 0 with the running server otherwise. Never throws, never exits;
+ * Runs `depgraph-view` with `argv` (the arguments after the program name). Code 0 without a server after
+ * printing the usage for `-h`/`--help`, 2 on a usage error, 1 when the server cannot start, 0 with the
+ * running server otherwise. Never throws, never exits;
  * `open` is how `--open` shows the page (tests pass their own).
  */
 export async function run(argv: string[], io: Io, open: (url: string) => void = openBrowser): Promise<{ code: number; server?: RunningServer }> {
   const args = parseArgs(argv)
+  if ('help' in args) {
+    io.out(args.help)
+    return { code: 0 }
+  }
   if ('error' in args) {
     io.err(args.error)
     return { code: 2 }

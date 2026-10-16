@@ -1,7 +1,7 @@
 import type { Plan, PlanNode, Status } from '../schema.js'
 
 /**
- * A real cross-linked plan's shape (ids, needs and states only; neutral titles): one goal, four areas under it and 48
+ * A cross-linked plan's shape (ids, needs and states only; neutral titles): one goal, four areas under it and 48
  * features, 40 of them done, many needed by two or three areas. Used to check that folding keeps the overview compact.
  */
 const n = (id: string, status: Status, depends_on: string[], k: number): PlanNode => ({ id, title: `Step ${k}`, description: '', status, tags: [], depends_on })

@@ -39,7 +39,7 @@
     "./viewer.css": "./dist/viewer.css"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19"
   },
   "scripts": {
     "build": "npm run build:lib && npm run build:view",

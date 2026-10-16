@@ -41,6 +41,11 @@ describe('validatePlan', () => {
     expect(validatePlan({ name: 'p', nodes: [node('a', [], { tags: [1] as never, description: 2 as never })] }))
       .toEqual(['node "a": description must be a string', 'node "a": tags must be an array of strings'])
   })
+  it('rejects a node that is not an object, a non-string title and a depends_on that is not an array of strings', () => {
+    expect(validatePlan({ name: 'p', nodes: [node('a'), 'b'] })).toEqual(['node 1: must be an object'])
+    expect(validatePlan({ name: 'p', nodes: [node('a', [], { title: 3 as never })] })).toEqual(['node "a": title must be a string'])
+    expect(validatePlan({ name: 'p', nodes: [node('a', [1] as never)] })).toEqual(['node "a": depends_on must be an array of strings'])
+  })
 })
 
 describe('findCycle', () => {

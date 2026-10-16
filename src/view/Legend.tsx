@@ -13,15 +13,8 @@ const NAME: Record<NodeState, string> = { ready: 'Ready', doing: 'Doing', waitin
 export const STATE_SWATCH: Readonly<Record<NodeState, string>> = SWATCH
 export const STATE_NAME: Readonly<Record<NodeState, string>> = NAME
 
-/** The legend's Ready and Doing rows open the ready-now list (see ReadyList) when `list` is given. */
-export interface LegendList {
-  open: boolean
-  onToggle: () => void
-  /** The id of the list the rows open, for `aria-controls`. */
-  controls: string
-}
-
-export default function Legend({ counts, held = 0, list }: { counts: Record<NodeState, number>; held?: number; list?: LegendList }) {
+/** How many steps are in each readiness state and on hold, the priority marks and the edge key, fixed in the bottom-left corner. */
+export default function Legend({ counts, held = 0 }: { counts: Record<NodeState, number>; held?: number }) {
   return (
     <div
       data-testid="legend"
@@ -31,32 +24,10 @@ export default function Legend({ counts, held = 0, list }: { counts: Record<Node
         {NODE_STATES.map(s => (
           <li key={s} data-testid={`legend-state-${s}`} className="flex items-center gap-2">
             <span aria-hidden className="inline-block h-3 w-1 rounded-sm" style={{ background: SWATCH[s] }} />
-            {list && (s === 'ready' || s === 'doing') ? (
-              // A way in to the ready-now list: the row's name and count as one button.
-              <button
-                type="button"
-                data-testid={`legend-open-${s}`}
-                data-ready-entry={s}
-                aria-expanded={list.open}
-                aria-controls={list.controls}
-                aria-label={`${NAME[s]}: ${counts[s]} ${counts[s] === 1 ? 'step' : 'steps'}. Show what can be worked on now`}
-                title="Show what can be worked on now (R)"
-                onClick={list.onToggle}
-                className={`-mx-1 flex flex-1 cursor-pointer items-center gap-2 rounded px-1 text-left underline decoration-white/25 decoration-dotted underline-offset-2 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-sky-300/80 ${list.open ? 'bg-white/10 text-white' : ''}`}
-              >
-                <span className="flex-1">{NAME[s]}</span>
-                <span data-testid={`legend-count-${s}`} className="tabular-nums text-white/90">
-                  {counts[s]}
-                </span>
-              </button>
-            ) : (
-              <>
-                <span className="flex-1">{NAME[s]}</span>
-                <span data-testid={`legend-count-${s}`} className="tabular-nums text-white/90">
-                  {counts[s]}
-                </span>
-              </>
-            )}
+            <span className="flex-1">{NAME[s]}</span>
+            <span data-testid={`legend-count-${s}`} className="tabular-nums text-white/90">
+              {counts[s]}
+            </span>
           </li>
         ))}
         <li data-testid="legend-row-later" className="flex items-center gap-2">

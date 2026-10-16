@@ -3,7 +3,7 @@ import type { Box } from './titleFit.js'
 
 /**
  * Bringing a label the keyboard focused into view: a label that lies even in part outside the free area (the window
- * less the strips the frames keep clear: toolbar, legend or ready-now list, bottom card, side panel) is obscured, and
+ * less the strips the frames keep clear: toolbar, legend or host left strip, bottom strip, side panel) is obscured, and
  * the camera pans, at the same zoom, by the shortest move that puts the whole label inside that area, `pad` px clear
  * of its edges along each axis it was out on. Pure: the graph measures the label and the area and moves the camera.
  */

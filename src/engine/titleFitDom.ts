@@ -10,11 +10,11 @@ import { FIT, fitTitles, rankOf, type Box, type Fit, type FitInput, type Rank } 
 
 /**
  * The graph's side of the title rule (titleFit.ts): measure each drawn label on screen, decide, and mark each label
- * with data-title-fit ("full", "short" with --fit-w, or "dot"), which globals.css draws.
+ * with data-title-fit ("full", "short" with --fit-w, or "dot"), which viewer.css draws.
  */
 
 /**
- * What globals.css draws, in card px, that the rule needs to know (titleFitDom.test.ts reads the stylesheet to keep
+ * What viewer.css draws, in card px, that the rule needs to know (titleFitDom.test.ts reads the stylesheet to keep
  * them the same): the title's font size and its line (1.2 of it), how wide the text block is, and how far past the
  * circle the overdue ring (inset -9px) and the chain, selected or open-deck ring (2px out, 2px wide) reach.
  */
@@ -346,7 +346,7 @@ export function runTitleFit(labels: Map<string, HTMLElement>, ranks: Map<string,
     // Screen px per card px (the zoom and the due-date ratio together), from the circle's drawn size.
     const k = dot ? (dot.right - dot.left) / (2 * r) : 1
     const deck = el.dataset.deck === 'true'
-    // The selected step's plate is measured every run, moving or not: it is always drawn (globals.css), so what is on
+    // The selected step's plate is measured every run, moving or not: it is always drawn (viewer.css), so what is on
     // the page is its real box, and it has its own size (not the boost every other title takes).
     const plate = el.dataset.selected === 'true'
     const key = shapeKey(el)
@@ -385,7 +385,7 @@ export function runTitleFit(labels: Map<string, HTMLElement>, ranks: Map<string,
     // An arrow climbing past this row into the circle of a step beside a block bends to that circle as drawn, which sits
     // as far left of its card's centre as this circle does of this one's: data-wall-dot (card centre to card centre).
     // That holds for a hovered, selected or date-sized target too: those change a circle's radius, ring and brackets,
-    // never its centre (globals.css .node-card: a date-sized card is moved back so its dot stays where an unscaled one
+    // never its centre (viewer.css .node-card: a date-sized card is moved back so its dot stays where an unscaled one
     // would, and every card draws at the same labelScale(ppu)), and the arrow ends at that centre.
     const [dotDx, dotTop, dotBottom] = (el.dataset.wallDot ?? '').split(':').map(Number)
     const dotWall = el.dataset.wallDot && ppu ? cx + dotDx * ppu : undefined
@@ -547,7 +547,7 @@ function markStyleOf(sel: { el: HTMLElement }): MarkStyle {
 
 /**
  * The selected step's brackets get as much room as there is before the nearest other circle (with its ring, a deck with
- * its fan, and its "+N" tag), as --mark-room in its card px (bracketRoom.ts; globals.css draws the brackets no wider, but never inside the
+ * its fan, and its "+N" tag), as --mark-room in its card px (bracketRoom.ts; viewer.css draws the brackets no wider, but never inside the
  * circle's own ring). Every other label drops one it had, so a step selected again starts from the usual size. Runs
  * before the brackets and the plate are measured, so the fit sees them as drawn.
  */
@@ -587,7 +587,7 @@ function circlesBut(rows: readonly CircleRow[], sel: CircleRow): Other[] {
  * narrower width that would end it before one (--plate-w, in the plate's own px; its words wrap), measured, and placed
  * (moved up or down by --plate-dy) where it crosses the fewest, inside `area` (else the window). Every label it still
  * crosses is marked data-under-plate, and the plate's backing is cut round it (--plate-holes, with data-plate-holes on
- * the selected label), so globals.css shows that circle through the plate under its words; every other label drops the
+ * the selected label), so viewer.css shows that circle through the plate under its words; every other label drops the
  * mark, and a label not selected drops its plate's place and holes. Runs after the brackets are sized (markRooms) and before the plate is
  * measured for the fit, so every other title keeps clear of it as drawn. `drawn`, where given, is the plate worked out
  * without measuring it (placeMarks, on a glide frame; its `full` is where it is drawn now, in full where it is in its

@@ -72,6 +72,7 @@ export default function ViewerPage() {
     [toolbarReach, panelReach, selected],
   )
 
+  // Each finished camera glide, as the `depgraph-view:glides` CustomEvent on window: the performance spec's probe.
   const onGlides = useCallback((glides: readonly GlideSummary[]) => {
     window.dispatchEvent(new CustomEvent('depgraph-view:glides', { detail: glides }))
   }, [])
@@ -120,11 +121,11 @@ export default function ViewerPage() {
           </div>
         )}
       </div>
-      {plan && selected !== null && data && (
+      {data && selected !== null && (
         <div className="fixed bottom-4 right-4 top-4 z-20 w-[min(26rem,calc(100vw-2rem))]">
           <Panel
             key={selected}
-            plan={plan}
+            plan={data.plan}
             id={selected}
             body={data.bodies[selected] ?? ''}
             files={data.resources[selected] ?? []}

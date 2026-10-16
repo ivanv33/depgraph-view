@@ -1,7 +1,7 @@
 /**
  * A neighbour whose cut or hidden title is shown (the pointer on its circle, or the keyboard focus on it) is drawn under
  * the selected step, unless its shown words cross the selected step's plate or brackets: then they would be mostly
- * covered, so that neighbour is marked data-over-plate and globals.css draws it over the selected step, until the
+ * covered, so that neighbour is marked data-over-plate and viewer.css draws it over the selected step, until the
  * pointer leaves its circle or the focus moves on; meanwhile the selected step is marked data-plate-covered. `shown` are the labels shown now; every other label loses the mark.
  * Measures the shown words, so it runs after data-hovered is set or the focus has moved (and again after a title fit,
  * as the view moves).
@@ -18,7 +18,7 @@ export function markOverPlate(shown: readonly (HTMLElement | null)[], labels: It
   let covered = false
   for (const l of these) {
     const words = l.querySelector('.node-label-text')?.getBoundingClientRect()
-    // only a cut or hidden title, shown by hover or by keyboard focus, is drawn over the plate (globals.css): a title shown
+    // only a cut or hidden title, shown by hover or by keyboard focus, is drawn over the plate (viewer.css): a title shown
     // in full, or a label focused by a click, draws nothing over it, so it must not hide the plate either
     const shownOnRequest = (l.dataset.titleFit === 'short' || l.dataset.titleFit === 'dot') && (l.dataset.hovered === 'true' || focusVisible(l))
     const over = l !== selected && shownOnRequest && !!words && [plate, mark].some(b => b && crosses(words, b))
@@ -26,7 +26,7 @@ export function markOverPlate(shown: readonly (HTMLElement | null)[], labels: It
     else delete l.dataset.overPlate
     covered ||= over
   }
-  // While shown words are drawn over it, the selected step's plate steps aside (globals.css hides it, its brackets stay),
+  // While shown words are drawn over it, the selected step's plate steps aside (viewer.css hides it, its brackets stay),
   // so no half-covered letters of it show round their backing.
   if (selected && covered) selected.dataset.plateCovered = 'true'
   else if (selected) delete selected.dataset.plateCovered

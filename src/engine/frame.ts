@@ -147,7 +147,7 @@ export function frameFor(nodes: Pt[], view: { w: number; h: number }, fovDeg: nu
   return { position: { x: cx, y: cy, z }, lookAt }
 }
 
-/** The most of the view's width the legend and side panel strips together may keep clear. */
+/** The most of the view's width the left and right strips together may keep clear: the right strip shrinks to fit (the host's left is never capped). */
 const MAX_SIDE_STRIPS = 0.6
 
 /** The strips (CSS px) the host keeps clear at each edge of the view: its toolbar, panels and anything else drawn over the graph. */
@@ -255,9 +255,9 @@ export function shouldFrameSelection(
   if (now.id !== last.id || now.right !== last.right || now.chain !== last.chain || !!now.folded !== !!last.folded) return true
   // A new view size decides alone, whatever else changed with it (the bottom card re-wrapping at a new width).
   if (now.view !== last.view) return shouldFrameResize({ userMoved: cam.userMoved, hid: cam.hid ?? false }, false)
-  // A ready-now list opening over the selection (left strip grows) counts like a card or layout shift: only if it covers the chain.
-  const listOpened = (now.left ?? 0) > (last.left ?? 0)
-  const shifted = now.bottom !== last.bottom || now.at !== last.at || listOpened
+  // The host left strip growing over the selection counts like a card or layout shift: only if it covers the chain.
+  const leftGrew = (now.left ?? 0) > (last.left ?? 0)
+  const shifted = now.bottom !== last.bottom || now.at !== last.at || leftGrew
   return shifted && cam.covered && !cam.userMoved
 }
 
@@ -409,7 +409,7 @@ export type Reach = { left: number; right: number; top: number; bottom: number }
 
 /**
  * How far the selected step is drawn past its slot's centre at `ppu`, `scale` times its size for a soon due date
- * (globals.css, .node-label[data-selected]; MARK_CSS): its brackets, the usual square at most, about its circle (`dot`:
+ * (viewer.css, .node-label[data-selected]; MARK_CSS): its brackets, the usual square at most, about its circle (`dot`:
  * its radius, --dot-r, and whether it is overdue, as its DueView gives them; an undated step's is DOT.r), and right of
  * them its plate as wide as its words may run (LABEL_TEXT.width at their boost). Up and down only the brackets count:
  * the plate's words are centred on the circle.
@@ -608,7 +608,7 @@ export function planFrame(plan: PlanPt[], view: View, fovDeg: number, host: Part
  * slot's right edge even at its own size (to 190 of the card's 170 px, LABEL_TEXT). Past the card floor
  * (LABEL_SCALE.min) a card stays that size on screen however small its slot gets, and below the size its title reads at
  * the title is boosted (titleBoost), so the words run farther still. A card drawn larger keeps its circle where an
- * undated one's is (globals.css, .node-card's `left`) and grows around it: up and down, a little to the left, and its
+ * undated one's is (viewer.css, .node-card's `left`) and grows around it: up and down, a little to the left, and its
  * words farther to the right. Given what the title fit measured of its words (`title`), the words end at its longest
  * drawn line rather than its text block's end, and a deck's words are counted at its card's size.
  */
@@ -621,7 +621,7 @@ export function pastSlots(ppu: number, scale = 1, title: TitleMeasure = {}): { t
   const card = (side: number) => Math.max(0, side * z - side * ppu)
   const left = Math.max(0, dot + DOT.cx * z - (cardW / 2) * ppu)
   // The words end where the longest drawn line does, never past the text block; a deck's are not boosted (its text
-  // block ends where a step's would at its card's size, globals.css).
+  // block ends where a step's would at its card's size, viewer.css).
   const text = Math.min(LABEL_TEXT.width, title.line ?? LABEL_TEXT.width) * (title.deck ? 1 : titleBoost(k))
   const words = Math.max(0, (LABEL_TEXT.left - DOT.cx + text) * z - dot - (cardW / 2) * ppu)
   return { top: card(cardH / 2), bottom: card(cardH / 2), left, right: words }
@@ -672,9 +672,8 @@ export function previewPlan(host: FrameHost, insets: Partial<Insets> = {}, legen
 /**
  * A selection as its frame takes it: the selected step's centre (`focus`, in the plane's coordinates, y up), its
  * chain's points (selectionPoints) and the strips kept clear, as the whole plan's frame takes them (frameInsets);
- * `dot`, the selected step's circle as drawn (selectedReach; DOT.r and not overdue when left out); `top`, the bottom
- * edge of the chrome drawn now at the top of the view (the toolbar as it wraps and the panel's collapsed bar under it).
- * Where that is lower than the frames' top strip the selected step as drawn keeps clear of it too (its reach up grows
+ * `dot`, the selected step's circle as drawn (selectedReach; DOT.r and not overdue when left out); `top`, how far down
+ * the view host chrome reaches when it reaches lower than `insets.top`. Where that is lower than the frames' top strip the selected step as drawn keeps clear of it too (its reach up grows
  * by the difference), so a step framed where its neighbours do not fit is never put under that chrome; the rest of the
  * chain keeps to the frames' strips as before.
  */
@@ -777,12 +776,12 @@ export function flyTakesFrame(fly: { id: string; seq: number } | null, flown: nu
   return fly !== null && fly.seq !== flown && fly.id === selectedId && canFly
 }
 
-/** Pixels per layout unit a fly to a step goes to (Shift+F, a "needs:" chip, a pick from the ready-now list). */
+/** Pixels per layout unit a fly to a step goes to (a host's fly request, such as a pick from a list). */
 export const FLY_PX_PER_UNIT = 1.2
 
 /**
  * Where (screen x, px) a fly puts the step's slot centre in a view `viewW` wide whose left `strip` px are kept clear
- * (the open ready-now list's column): the middle of the room beside the strip, moved as little as it takes to keep the
+ * (the host left strip): the middle of the room beside the strip, moved as little as it takes to keep the
  * step as drawn (`reach`, selectedReach) FRAME.edgeMargin inside that room. Null when the room is too narrow for it.
  */
 export function flyX(viewW: number, strip: number, reach: Reach): number | null {
@@ -803,9 +802,9 @@ export function flyY(viewH: number, top: number, bottom: number, reach: Reach): 
 }
 
 /**
- * Where (screen px) a fly puts the step's slot centre: across, beside an open ready-now list's column (`strips.left`)
- * where flyX has it, the middle of the room beside the list when the step cannot fit there, the middle of the view
- * with no list; down, above the new step's bottom card (flyY).
+ * Where (screen px) a fly puts the step's slot centre: across, beside the host left strip (`strips.left`) where flyX
+ * has it, the middle of the room beside the strip when the step cannot fit there, the middle of the view with no
+ * strip; down, above the new step's bottom card (flyY).
  */
 export function flyAt(view: View, strips: { left: number; top: number; bottom: number }, reach: Reach): { x: number; y: number } {
   const { left } = strips

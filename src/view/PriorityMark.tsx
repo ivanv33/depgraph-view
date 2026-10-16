@@ -13,7 +13,7 @@ export interface PriorityMarkProps {
 
 /**
  * The priority mark for React places (search results, the bottom card, the panel header, the chip, the legend): the
- * same bars as the graph labels draw (src/lib/priorityMark.ts). Sized by the `priority-mark` class in globals.css, in
+ * same bars as the graph labels draw (engine/priorityMark.ts). Sized by the `priority-mark` class in viewer.css, in
  * em, so it follows the text beside it.
  */
 export default function PriorityMark({ priority, className, decorative = false, unlitNormal = false }: PriorityMarkProps) {

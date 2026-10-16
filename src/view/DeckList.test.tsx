@@ -27,7 +27,6 @@ describe('DeckList rows', () => {
         rows={[row('a', { priority: 'high' }), row('b'), row('c', { priority: 'low', state: 'done' })]}
         anchor={() => undefined}
         frameRef={{ current: null }}
-        linking={false}
         around={{}}
         onPick={vi.fn()}
         onClose={vi.fn()}
@@ -81,7 +80,6 @@ describe('DeckList place', () => {
         rows={[row('a')]}
         anchor={() => deck}
         frameRef={frameRef}
-        linking={false}
         around={{}}
         onPick={vi.fn()}
         onClose={vi.fn()}
@@ -105,5 +103,43 @@ describe('DeckList place', () => {
     unmount()
     expect(frameRef.current).toBeNull()
     deck.remove()
+  })
+
+  it('ends above the Legend in the bottom-left corner while the Legend is shown', () => {
+    const deck = deckAt({ v: 10 })
+    const size = { w: window.innerWidth, h: window.innerHeight }
+    const setView = (w: number, h: number) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: w })
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: h })
+    }
+    const open = () =>
+      render(
+        <DeckList
+          deckId="deck:x"
+          title="1 step"
+          mix={[]}
+          rows={[row('a')]}
+          anchor={() => deck}
+          frameRef={{ current: null }}
+          around={{}}
+          onPick={vi.fn()}
+          onClose={vi.fn()}
+          onFocusLost={vi.fn()}
+        />,
+      )
+    try {
+      // 600 px tall: the Legend's top edge is 304 px above the bottom, so the list ends 8 px above it (296 - 8 - 8 top)
+      setView(1000, 600)
+      open()
+      expect(screen.getByTestId('deck-list').style.maxHeight).toBe('280px')
+      cleanup()
+      // narrower than 640 px the Legend is hidden: the list may reach the window's bottom margin
+      setView(600, 600)
+      open()
+      expect(screen.getByTestId('deck-list').style.maxHeight).toBe('440px')
+    } finally {
+      setView(size.w, size.h)
+      deck.remove()
+    }
   })
 })

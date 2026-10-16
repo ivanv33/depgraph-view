@@ -51,11 +51,11 @@ describe('run', () => {
     expect(code).toBe(0)
     expect(io.outLines).toEqual([server!.url])
   })
-  it('exits 2 with the usage for --help and an error for bad arguments', async () => {
+  it('prints the usage to stdout and exits 0 for --help, exits 2 with an error for bad arguments', async () => {
     const help = capture()
-    expect(await start(['--help'], help)).toEqual({ code: 2 })
-    expect(help.errLines).toEqual([USAGE])
-    expect(help.outLines).toEqual([])
+    expect(await start(['--help'], help)).toEqual({ code: 0 })
+    expect(help.outLines).toEqual([USAGE])
+    expect(help.errLines).toEqual([])
     const io = capture()
     expect((await start([root, '--port', 'x'], io)).code).toBe(2)
     expect(io.errLines).toHaveLength(1)
