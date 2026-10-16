@@ -1,3 +1,5 @@
 export { default as Graph, type GraphProps } from './Graph.js'
 export { default as Legend } from './Legend.js'
+export { default as Panel, type PanelProps } from './Panel.js'
+export { default as Search, type SearchProps } from './Search.js'
 export type { Insets } from '../engine/frame.js'
