@@ -89,9 +89,9 @@ function loopbackHost(host: string | undefined): boolean {
   return LOOPBACK_HOSTS.has(name.toLowerCase())
 }
 
-function route(source: GraphSource, distDir: string, req: IncomingMessage, res: ServerResponse): void {
+function route(source: GraphSource, distDir: string, checkHost: boolean, req: IncomingMessage, res: ServerResponse): void {
   // DNS rebinding: a page on another origin that resolves its name to 127.0.0.1 still sends its own Host.
-  if (!loopbackHost(req.headers.host)) return send(req, res, 403, { 'Content-Type': TEXT }, 'Forbidden\n')
+  if (checkHost && !loopbackHost(req.headers.host)) return send(req, res, 403, { 'Content-Type': TEXT }, 'Forbidden\n')
   if (req.method !== 'GET' && req.method !== 'HEAD')
     return send(req, res, 405, { 'Content-Type': TEXT, Allow: 'GET, HEAD' }, 'Method not allowed\n')
   // The raw path, not a WHATWG URL: URL parsing would resolve `..` and `%2e%2e` before the guard sees them.
@@ -129,12 +129,16 @@ function route(source: GraphSource, distDir: string, req: IncomingMessage, res: 
   return notFound(req, res)
 }
 
-/** The request listener: read-only routes over the graph in `source` and the built page in `distDir`. */
-export function createHandler(source: GraphSource, distDir: string): (req: IncomingMessage, res: ServerResponse) => void {
+/**
+ * The request listener: read-only routes over the graph in `source` and the built page in `distDir`.
+ * `checkHost` (on by default) refuses a request whose Host is not a loopback name; a server bound beyond
+ * loopback turns it off, since its clients name it by a LAN address.
+ */
+export function createHandler(source: GraphSource, distDir: string, { checkHost = true }: { checkHost?: boolean } = {}): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff')
     try {
-      route(source, distDir, req, res)
+      route(source, distDir, checkHost, req, res)
     } catch {
       // Never echo the error: I/O messages carry absolute paths.
       if (res.headersSent) res.destroy()

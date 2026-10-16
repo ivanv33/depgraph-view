@@ -1,10 +1,18 @@
 # depgraph-view
 
-A read-only 3D viewer for dependency graphs. Point it at a `graph.json` whose nodes name a markdown file each. It serves the graph on `127.0.0.1` as a force-directed, layered 3D view. You can pan, zoom, group branches, search steps by title or id, and open a step to read its markdown, its dependencies and the files in its folder. It follows the files on disk and reloads the page when they change. Nothing is ever written: there is no editing, no upload and no write route.
+A read-only 3D viewer for dependency graphs. Point it at a `graph.json` whose nodes name a markdown file each. It serves the graph on `127.0.0.1` (or your network, with `--host`) as a force-directed, layered 3D view. You can pan, zoom, group branches, search steps by title or id, and open a step to read its markdown, its dependencies and the files in its folder. It follows the files on disk and reloads the page when they change. Nothing is ever written: there is no editing, no upload and no write route.
 
 ![The viewer showing an eleven-step garden plan as a layered graph, with the step "Spread compost on the beds" selected and its panel open on the right: the step's text and image, the steps it depends on and is needed by, and its two files](https://raw.githubusercontent.com/ivanv33/depgraph-view/main/docs/viewer.png)
 
 ## Quick start
+
+```sh
+npx github:ivanv33/depgraph-view garden/graph.json
+```
+
+This runs the viewer straight from GitHub. A git install builds from source, so the first run takes a minute.
+
+Once the package is published to npm:
 
 ```sh
 npx depgraph-view garden/graph.json
@@ -25,6 +33,16 @@ depgraph-view garden
 
 ### Install from GitHub
 
+Any of these forms works with `npx`:
+
+```sh
+npx github:ivanv33/depgraph-view garden
+npx ivanv33/depgraph-view garden
+npx https://github.com/ivanv33/depgraph-view garden
+```
+
+To pin a release, add its tag:
+
 ```sh
 npx github:ivanv33/depgraph-view#v0.1.0 garden
 ```
@@ -40,26 +58,27 @@ A git install builds the package from source, so it is slower than installing th
 ## CLI reference
 
 ```
-depgraph-view <path> [--port N] [--open] [--no-watch]
+depgraph-view <path> [--port N] [--host ADDR] [--open] [--no-watch]
 ```
 
 | Argument | Meaning |
 | --- | --- |
 | `<path>` | A graph JSON file, or a folder holding exactly one `.json` file at its top level (usually `graph.json`). |
 | `--port N` | Serve on port `N` (0–65535; `0` lets the OS pick). A port that is taken is an error. Without `--port`, the first free port from `4310` upward. |
-| `--open` | Open the page in the default browser. Off by default. |
+| `--host ADDR` | Bind `ADDR`: an IPv4 or IPv6 address, or a host name. Defaults to `127.0.0.1`. `0.0.0.0` (or `::`) serves every network interface; see [Serving on the network](#serving-on-the-network). |
+| `--open` | Open the page in the default browser (the first URL printed). Off by default. |
 | `--no-watch` | Serve the graph as loaded, without following file changes. |
 | `-h`, `--help` | Print the usage to stdout and exit with code `0`. |
 
-On start the URL goes to stdout. Warnings from loading (see below) go to stderr as `warning: <text>`, and the page lists them too.
+On start the URL goes to stdout. With `--host 0.0.0.0` or `::`, stdout gets one URL per LAN address instead, the first one first. Warnings from loading (see below) go to stderr as `warning: <text>`, and the page lists them too.
 
 ### Exit codes
 
 | Code | When |
 | --- | --- |
 | `0` | The server started (and later stopped on SIGINT or SIGTERM), or `-h` / `--help` printed the usage. |
-| `1` | The server could not start: invalid JSON, a graph the schema refuses, a missing path, a folder without exactly one `.json` file, or a `--port` that is in use. The message is printed to stderr as `depgraph-view: <message>`. |
-| `2` | Usage error: no path, two paths, an unknown option or a bad `--port` value. The usage is printed to stderr. |
+| `1` | The server could not start: invalid JSON, a graph the schema refuses, a missing path, a folder without exactly one `.json` file, a `--port` that is in use, or a `--host` that cannot be bound. The message is printed to stderr as `depgraph-view: <message>`. |
+| `2` | Usage error: no path, two paths, an unknown option, a bad `--port` value or a `--host` without a value. The usage is printed to stderr. |
 
 ## The `graph.json` contract
 
@@ -152,9 +171,19 @@ At startup a rejected file ends the CLI with exit code 1. While watching, a chan
 
 ## Routes and security
 
-The server uses Node's `http` module and binds `127.0.0.1` only. It answers `GET` and `HEAD`; anything else is `405`. Every response carries `X-Content-Type-Options: nosniff`.
+The server uses Node's `http` module and binds `127.0.0.1` unless you pass `--host`. It answers `GET` and `HEAD`; anything else is `405`. Every response carries `X-Content-Type-Options: nosniff`.
 
 A request whose `Host` header is not `127.0.0.1`, `localhost` or `[::1]` (with or without the port), or that has none, is refused with `403`. So a page on another origin cannot reach the server through DNS rebinding.
+
+### Serving on the network
+
+`--host 0.0.0.0` binds every network interface, so other devices on your network can open the viewer:
+
+```sh
+npx github:ivanv33/depgraph-view garden --host 0.0.0.0
+```
+
+The CLI prints a URL for each LAN address, and a warning on stderr. Anyone who can reach the port can read the plan and every step's folder. The `Host` check above is off for any bind that is not loopback, since other devices name the server by its address. Everything else stays the same: the server is still read-only, with the same routes and headers.
 
 | Route | Serves |
 | --- | --- |
@@ -212,7 +241,7 @@ import 'depgraph-view/viewer.css'
 
 - `depgraph-view/engine`: the layout, schema and label modules as namespaces, for example `schema` (`validatePlan`, `ID_RE`, the `Plan` types), `layered`, `grouping`, `graphData`, `camera`, `frame`. The label modules build DOM and need a browser `document`.
 - `depgraph-view/server` (Node only):
-  - `startServer({ path, port?, watch?, distDir? })` resolves to `{ url, port, warnings, close() }`.
+  - `startServer({ path, port?, host?, watch?, distDir? })` resolves to `{ url, urls, port, warnings, close() }`. `host` defaults to `127.0.0.1`; `urls` lists every URL it is reachable at and `url` is the first.
   - `loadGraph(rootDir, json)` is the loader behind the contract above. It reads the md files and folders under `rootDir` and returns `{ plan, resources, bodies, warnings, ... }`.
   - `GraphError` and `PortInUseError` are the errors they throw.
 

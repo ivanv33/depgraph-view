@@ -1,5 +1,6 @@
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer, request, type Server } from 'node:http'
+import { createServer as createNetServer } from 'node:net'
 import type { AddressInfo } from 'node:net'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -36,6 +37,13 @@ function hostStatus(url: string, host: string | null): Promise<number> {
     req.end()
   })
 }
+
+/** Whether this machine lets a test bind 0.0.0.0 (a sandbox may not). */
+const canBindAll = await new Promise<boolean>(resolve => {
+  const probe = createNetServer()
+  probe.once('error', () => resolve(false))
+  probe.listen(0, '0.0.0.0', () => probe.close(() => resolve(true)))
+})
 
 let root: string
 let distDir: string
@@ -100,6 +108,34 @@ describe('startServer', () => {
     expect(await hostStatus(server.url, null)).toBe(403)
     for (const host of ['127.0.0.1', `127.0.0.1:${server.port}`, 'localhost', `localhost:${server.port}`, '[::1]', `[::1]:${server.port}`])
       expect(await hostStatus(server.url, host), host).toBe(200)
+  })
+  it('binds an explicit 127.0.0.1 and keeps the Host check', async () => {
+    const explicit = await startServer({ path: root, port: 0, distDir, host: '127.0.0.1', watch: false })
+    try {
+      expect(explicit.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/)
+      expect(explicit.urls).toEqual([explicit.url])
+      expect(await hostStatus(explicit.url, 'evil.example')).toBe(403)
+      expect(await hostStatus(explicit.url, '127.0.0.1')).toBe(200)
+    } finally {
+      await explicit.close()
+    }
+  })
+  it.skipIf(!canBindAll)('binds 0.0.0.0 and accepts any Host there', async () => {
+    const all = await startServer({ path: root, port: 0, distDir, host: '0.0.0.0', watch: false })
+    try {
+      expect(all.urls.length).toBeGreaterThan(0)
+      expect(all.url).toBe(all.urls[0])
+      expect(all.url).toMatch(new RegExp(`^http://[0-9.]+:${all.port}/$`))
+      const local = `http://127.0.0.1:${all.port}/`
+      for (const host of ['evil.example', `evil.example:${all.port}`, '127.0.0.1', null]) expect(await hostStatus(local, host), String(host)).toBe(200)
+      expect((await fetch(`${local}api/graph`)).status).toBe(200)
+      expect((await fetch(`${local}api/graph`, { method: 'POST' })).status).toBe(405)
+    } finally {
+      await all.close()
+    }
+  })
+  it('rejects a host it cannot bind', async () => {
+    await expect(startServer({ path: root, port: 0, distDir, host: '203.0.113.7', watch: false })).rejects.toThrow()
   })
   it('404s node files under .git or node_modules', async () => {
     for (const rel of ['.git/config', 'node_modules/x.js', 'sub/node_modules/x.js', 'sub/ok.txt']) {
@@ -197,6 +233,21 @@ describe('createHandler', () => {
     expect(r.status).toBe(500)
     expect(r.headers.get('content-type')).toBe('text/plain; charset=utf-8')
     expect(await r.text()).not.toContain('/private')
+  })
+  it('accepts any Host, or none, when the check is off and refuses a forged one by default', async () => {
+    const source: GraphSource = { current: () => { throw new Error('unused') }, on: () => () => {}, close: async () => {} }
+    const dist = makeFolder({ 'index.html': '<!doctype html>' })
+    bare = createServer({ requireHostHeader: false }, createHandler(source, dist, { checkHost: false }))
+    await new Promise<void>(resolve => bare.listen(0, '127.0.0.1', resolve))
+    const open = `http://127.0.0.1:${(bare.address() as AddressInfo).port}/`
+    for (const host of ['evil.example', 'box.local:80', null]) expect(await hostStatus(open, host), String(host)).toBe(200)
+    const strict = createServer({ requireHostHeader: false }, createHandler(source, dist))
+    await new Promise<void>(resolve => strict.listen(0, '127.0.0.1', resolve))
+    try {
+      expect(await hostStatus(`http://127.0.0.1:${(strict.address() as AddressInfo).port}/`, 'evil.example')).toBe(403)
+    } finally {
+      await new Promise<void>(resolve => strict.close(() => resolve()))
+    }
   })
   it('writes error events on /events and unsubscribes when the client goes', async () => {
     const listeners = new Set<(e: LiveEvent) => void>()

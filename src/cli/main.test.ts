@@ -14,6 +14,13 @@ function capture(): Io & { outLines: string[]; errLines: string[] } {
   return { outLines, errLines, out: line => void outLines.push(line), err: line => void errLines.push(line) }
 }
 
+/** Whether this machine lets a test bind 0.0.0.0 (a sandbox may not). */
+const canBindAll = await new Promise<boolean>(resolve => {
+  const probe = createServer()
+  probe.once('error', () => resolve(false))
+  probe.listen(0, '0.0.0.0', () => probe.close(() => resolve(true)))
+})
+
 const GRAPH = JSON.stringify({ name: 'Orchard', nodes: [{ id: 'a', md: 'a.md' }] })
 
 let root: string
@@ -83,6 +90,33 @@ describe('run', () => {
     } finally {
       await new Promise<void>(resolve => held.close(() => resolve()))
     }
+  })
+  it('binds 127.0.0.1 by default and prints no network warning', async () => {
+    const io = capture()
+    const { server } = await start([root, '--port', '0', '--no-watch', '--host', '127.0.0.1'], io)
+    expect(io.outLines).toEqual([server!.url])
+    expect(server!.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/)
+    expect(io.errLines).toEqual([])
+  })
+  it.skipIf(!canBindAll)('serves on 0.0.0.0 with every LAN URL on stdout, the first opened, and one warning on stderr', async () => {
+    const opened: string[] = []
+    const io = capture()
+    const { code, server } = await start([root, '--port', '0', '--no-watch', '--host', '0.0.0.0', '--open'], io, url => void opened.push(url))
+    expect(code).toBe(0)
+    expect(io.outLines).toEqual(server!.urls)
+    expect(io.outLines[0]).toBe(server!.url)
+    expect(opened).toEqual([server!.url])
+    expect(io.errLines).toEqual(['warning: serving on 0.0.0.0; anyone who can reach this port can read the plan and every node folder'])
+  })
+  it('exits 1 when the host cannot be bound and 2 when --host has no value', async () => {
+    const io = capture()
+    expect(await start([root, '--port', '0', '--no-watch', '--host', '203.0.113.7'], io)).toEqual({ code: 1 })
+    expect(io.errLines).toHaveLength(1)
+    expect(io.errLines[0]).toMatch(/^depgraph-view: /)
+    expect(io.outLines).toEqual([])
+    const usage = capture()
+    expect((await start([root, '--host'], usage)).code).toBe(2)
+    expect(usage.errLines).toHaveLength(1)
   })
   it('prints warnings to stderr only', async () => {
     const dir = makeFolder({
