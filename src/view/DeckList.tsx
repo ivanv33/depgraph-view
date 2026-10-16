@@ -22,7 +22,7 @@ interface DeckListProps {
    */
   frameRef: RefObject<DeckListFrame | null>
   /** The host's chrome over the graph, in window px (insetBoxes): the list stays clear of it. */
-  around: { toolbar?: Box; panel?: Box }
+  around: { toolbar?: Box; panel?: Box; hud?: Box }
   onPick: (id: string) => void
   /** Select the step the deck hangs from, which draws its whole branch (a branch deck only). */
   onOpenBranch?: () => void

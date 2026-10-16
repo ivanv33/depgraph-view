@@ -194,4 +194,19 @@ describe('useElementEdge', () => {
     rerender({ on: false })
     expect(result.current, 'forgotten once inactive').toBeNull()
   })
+  it('bottom is how far up from the window\'s bottom edge the element reaches (the height less its top)', async () => {
+    vi.stubGlobal('innerHeight', 844)
+    const el = card(828)
+    el.getBoundingClientRect = () => ({ top: 500 }) as DOMRect
+    document.body.append(el)
+    const { result } = renderHook(() => useElementEdge(SEL, 'bottom', true, 0))
+    expect(result.current).toBe(344)
+    // its content grows: the sheet rises
+    el.getBoundingClientRect = () => ({ top: 420 }) as DOMRect
+    act(() => {
+      for (const o of observers) o.fire(el)
+    })
+    await flush()
+    expect(result.current).toBe(424)
+  })
 })
