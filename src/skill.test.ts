@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { makeFolder, removeFolders } from './server/__tests__/folder.js'
+import { ID_RE } from './engine/schema.js'
 import { COMMON_KEYS, splitNodeFile } from './server/frontmatter.js'
 import { loadGraphFile, resolveGraphPath, type LoadResult } from './server/loader.js'
 import { parseGraphYaml } from './server/planYaml.js'
@@ -210,5 +211,157 @@ describe('the depgraph skill', () => {
     expect(fences(doc, 'text')).toEqual(['broken: [\n'])
     expect(frontmatterOf('---\ntitle: A\n---\nbody\n')).toBe('title: A\n')
     expect(frontmatterOf('just text')).toBeNull()
+  })
+})
+
+/** The first-cell message of every row in the table under `heading` (up to the next `## `); a row whose first cell is not one backticked message fails. */
+function tableMessages(md: string, heading: '## Refusals' | '## Warnings'): string[] {
+  const lines = md.split('\n')
+  const start = lines.indexOf(heading)
+  if (start === -1) throw new Error(`no ${heading} section`)
+  const end = lines.findIndex((l, i) => i > start && /^#{1,2} /.test(l))
+  const rows = lines.slice(start + 1, end === -1 ? undefined : end).filter(l => l.startsWith('|'))
+  return rows.slice(2).map(row => {
+    const m = /^\|\s*`([^`]+)`\s*\|/.exec(row)
+    if (!m) throw new Error(`${heading}: first cell is not one backticked message: ${row}`)
+    return m[1]
+  })
+}
+
+/** A table cell as an anchored pattern: `<...>` matches any text, a standalone `L`, `C` or `N` any number. */
+function messageRe(cell: string): RegExp {
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const piece = (s: string) => s.split(/\b[LCN]\b/).map(esc).join('\\d+')
+  return new RegExp(`^${cell.split(/<[^>]+>/).map(piece).join('.+?')}$`)
+}
+
+/** A one-step kitchen plan with `step` as the step's value and, unless null, `card` as its card's frontmatter. */
+const kitchen = (step: string, card: string | null = 'title: Buy flour\n'): Record<string, string> => ({
+  'kitchen.yaml': `name: Bake bread\nnodes:\n  buy-flour: ${step}\n`,
+  ...(card === null ? {} : { 'nodes/buy-flour.context/buy-flour.md': `---\n${card}---\nFrom the corner shop.\n` }),
+})
+const plan = (nodes: string) => ({ 'kitchen.yaml': `name: Bake bread\nnodes:\n${nodes}` })
+
+describe('references/format.md', () => {
+  it('states the id pattern, the seven keys and their values', () => {
+    const md = read(FORMAT_MD)
+    for (const word of [ID_RE.source, ...COMMON_KEYS, 'todo', 'doing', 'done', 'blocked', 'low', 'normal', 'high']) expect(md, word).toContain(word)
+  })
+
+  it('every refusal in the table is what the loader prints', () => {
+    const refusals: Record<string, { files: Record<string, string>; target?: string }> = {
+      'graph must be a mapping': { files: { 'kitchen.yaml': '- buy-flour\n' } },
+      'name must be a string': { files: { 'kitchen.yaml': 'nodes: {}\n' } },
+      'name must be a string: quote it as "<name>"': { files: { 'kitchen.yaml': 'name: 2027\nnodes: {}\n' } },
+      'nodes must be a mapping': { files: { 'kitchen.yaml': 'name: Bake bread\nnodes:\n  - buy-flour\n' } },
+      'id "<id>" does not match ^[a-z0-9][a-z0-9-]*$': { files: plan('  Buy_Flour: {}\n') },
+      'node id <id> is not a string: quote it as "<id>"': { files: plan('  2027: {}\n') },
+      'node id must be a string such as dig-beds': { files: plan('  1.5: {}\n') },
+      '<file>: Map keys must be unique at line L, column C': { files: plan('  buy-flour: {}\n  buy-flour: {}\n') },
+      'node "<id>": must be a mapping or empty': { files: kitchen('[knead]') },
+      'node "<id>": needs must be a list': { files: { ...plan('  knead: {needs: buy-flour}\n  buy-flour: {}\n') } },
+      'node "<id>": needs must be a list of ids': { files: plan('  knead: {needs: [[buy-flour]]}\n  buy-flour: {}\n') },
+      'node "<id>": needs item <id> is not a string: quote it as "<id>"': { files: plan('  knead: {needs: [2027]}\n') },
+      'node "<id>": needs item must be a string such as dig-beds': { files: plan('  knead: {needs: [1.5]}\n') },
+      'node "<id>": md must be a string': { files: kitchen('{md: 5}') },
+      'node "<id>": dir must be a string': { files: kitchen('{dir: [shop]}') },
+      'node "<id>": depends on itself': { files: kitchen('{needs: [buy-flour]}') },
+      'cycle: <first> -> <next> -> <first>': {
+        files: {
+          ...plan('  knead: {needs: [prove]}\n  prove: {needs: [knead]}\n'),
+          'nodes/knead.context/knead.md': '---\ntitle: Knead\n---\n',
+          'nodes/prove.context/prove.md': '---\ntitle: Prove\n---\n',
+        },
+      },
+      'node "<id>": title must be a string': { files: kitchen('{}', 'title: [Buy flour]\n') },
+      'node "<id>": description must be a string': { files: kitchen('{}', 'description: {kind: strong}\n') },
+      'node "<id>": invalid status "<status>"': { files: kitchen('{}', 'status: started\n') },
+      'node "<id>": tags must be an array of strings': { files: kitchen('{}', 'tags: shopping\n') },
+      'node "<id>": due must be a date YYYY-MM-DD': { files: kitchen('{}', 'due: 2027-02-30\n') },
+      'node "<id>": invalid priority "<priority>"': { files: kitchen('{}', 'priority: urgent\n') },
+      'node "<id>": hold must be 1-200 characters': { files: kitchen('{}', 'hold: ""\n') },
+      'node "<id>": frontmatter is not closed': { files: { ...kitchen('{}', null), 'nodes/buy-flour.context/buy-flour.md': '---\ntitle: Buy flour\n' } },
+      'node "<id>": frontmatter must be a mapping': { files: kitchen('{}', '- Buy flour\n') },
+      'node "<id>": Map keys must be unique at line L, column C': { files: kitchen('{}', 'title: Buy flour\ntitle: Buy rye\n') },
+      'node "<id>": Nested mappings are not allowed in compact mappings at line L, column C': { files: kitchen('{}', 'title: Shop: flour and yeast\n') },
+      'not found: <path>': { files: plan('  buy-flour: {}\n'), target: 'pantry' },
+      '<file>: not a plan file (expected .yaml or .yml)': { files: { 'recipe.txt': 'flour, water, salt\n' }, target: 'recipe.txt' },
+      '<path>: expected exactly one .yaml file at the top of the folder, found N: <files>': {
+        files: { 'bread.yaml': 'name: Bread\nnodes: {}\n', 'cake.yaml': 'name: Cake\nnodes: {}\n' },
+      },
+      '<path>: expected a .yaml plan file at the top of the folder, found none': { files: { 'notes.txt': 'flour\n' } },
+      '<path>: expected a .yaml plan file at the top of the folder, found none; <files> found: name the file explicitly or rename it to .yaml': {
+        files: { 'kitchen.yml': 'name: Bake bread\nnodes: {}\n' },
+      },
+      '<name>.json: JSON graph files are no longer read; rewrite it as <name>.yaml (see README "From graph.json")': {
+        files: { 'kitchen.json': '{"name": "Bake bread", "nodes": []}\n' },
+      },
+    }
+    // Pinned elsewhere (src/cli/main.test.ts) or needing an unreadable file: in the table, not loaded here.
+    const exempt = ['port N is in use', '<file>: cannot be read (<code>)']
+    const rows = tableMessages(read(FORMAT_MD), '## Refusals')
+    expect(exempt.filter(e => !rows.includes(e))).toEqual([])
+    expect(Object.keys(refusals).sort()).toEqual(rows.filter(r => !exempt.includes(r)).sort())
+    for (const [cell, { files, target }] of Object.entries(refusals)) expect(() => loadIn(files, target), cell).toThrow(messageRe(cell))
+  })
+
+  it('every warning in the table is what the loader prints', () => {
+    const many: Record<string, string> = {}
+    for (let i = 0; i < 500; i++) many[`nodes/buy-flour.context/receipts/r${String(i).padStart(3, '0')}.txt`] = 'paid\n'
+    const warnings: Record<string, { files: Record<string, string>; target?: string }> = {
+      'unknown top-level key "<key>" ignored': { files: { ...kitchen('{}'), 'kitchen.yaml': 'name: Bake bread\noven: hot\nnodes:\n  buy-flour: {}\n' } },
+      'node "<id>": unknown key "<key>" ignored': { files: kitchen('{need: [knead]}') },
+      'node "<id>": no md file': { files: kitchen('{}', null) },
+      'node "<id>": md not found': { files: kitchen('{md: cards/flour.md}', null) },
+      'node "<id>": md is outside the folder': { files: kitchen('{md: ../flour.md}', null) },
+      'node "<id>": dir is outside the folder': { files: kitchen('{dir: ../shop}') },
+      'node "<id>": dir not found': { files: kitchen('{dir: shop}') },
+      'node "<id>": unknown dependency "<id>" dropped': { files: kitchen('{needs: [buy-yeast]}') },
+      'node "<id>": more than 500 files, list cut': { files: { ...kitchen('{}'), ...many } },
+    }
+    const rows = tableMessages(read(FORMAT_MD), '## Warnings')
+    expect(Object.keys(warnings).sort()).toEqual([...rows].sort())
+    for (const [cell, { files, target }] of Object.entries(warnings)) {
+      const r = loadIn(files, target)
+      expect(r.warnings.some(w => messageRe(cell).test(w)), `${cell}: ${JSON.stringify(r.warnings)}`).toBe(true)
+    }
+  })
+
+  it('reports several card errors in one run', () => {
+    expect(() => loadIn(kitchen('{}', 'status: started\npriority: urgent\n'))).toThrow(/invalid status "started"; node "buy-flour": invalid priority "urgent"/)
+  })
+
+  it('hold length is counted after whitespace collapses', () => {
+    const doubled = `${'a'.repeat(99)}  ${'b'.repeat(100)}`
+    expect(doubled).toHaveLength(201)
+    expect(loadIn(kitchen('{}', `hold: ${doubled}\n`)).plan.nodes[0].hold).toBe(doubled)
+    const long = `${'a'.repeat(100)} ${'b'.repeat(100)}`
+    expect(() => loadIn(kitchen('{}', `hold: ${long}\n`))).toThrow(/hold must be 1-200 characters/)
+  })
+
+  it('an empty card key is absent even over the YAML', () => {
+    const r = loadIn(kitchen('{priority: high}', 'title: Buy flour\npriority:\n'))
+    expect(r.warnings).toEqual([])
+    expect(r.plan.nodes[0].priority).toBeUndefined()
+  })
+
+  it('a deleted folder at the plan root is ignored', () => {
+    const card = (t: string) => `---\ntitle: ${t}\n---\n`
+    const r = loadIn({
+      'kitchen.yaml': 'name: Bake bread\nnodes:\n  a: {}\n  b: {needs: [a]}\n',
+      'nodes/a.context/a.md': card('Buy flour'),
+      'nodes/b.context/b.md': card('Knead'),
+      'deleted/c.context/c.md': card('Buy yeast'),
+    })
+    expect(r.warnings).toEqual([])
+    expect(r.plan.nodes.map(n => n.id)).toEqual(['a', 'b'])
+  })
+
+  it('the table helpers read rows and match messages', () => {
+    const md = '## Refusals\n\n| Message | Cause | Fix |\n| --- | --- | --- |\n| `node "<id>": line L` | x | y |\n\n## Warnings\n'
+    expect(tableMessages(md, '## Refusals')).toEqual(['node "<id>": line L'])
+    expect(messageRe('node "<id>": line L').test('node "buy-flour": line 12')).toBe(true)
+    expect(messageRe('node "<id>": line L').test('node "buy-flour": line twelve')).toBe(false)
+    expect(messageRe('id "<id>" does not match ^[a-z0-9]$').test('id "X" does not match ^[a-z0-9]$')).toBe(true)
   })
 })
