@@ -67,7 +67,10 @@ export interface GraphProps {
   grouped: boolean
   /** The local date (YYYY-MM-DD) due dates are read against. */
   today: string
-  /** Host chrome over the graph in CSS px; nothing inside Graph queries the host DOM. */
+  /**
+   * Host chrome over the graph in CSS px; nothing inside Graph queries the host DOM. Insets and boxes are window px:
+   * the host lays the graph's root over the whole window from (0, 0), its chrome as overlays on top.
+   */
   insets: Insets
   /** Bumped to frame the whole plan (the toolbar's fit button); the selection stays. */
   fitAll: number

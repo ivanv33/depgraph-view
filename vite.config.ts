@@ -9,6 +9,8 @@ export default defineConfig({
     outDir: '../../dist',
     emptyOutDir: true,
     cssCodeSplit: false,
+    // One page served from localhost: three.js makes the single bundle about 1.9 MB, which is expected, not a warning.
+    chunkSizeWarningLimit: 2500,
     rollupOptions: {
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

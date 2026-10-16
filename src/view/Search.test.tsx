@@ -71,6 +71,21 @@ describe('Search', () => {
     expect(screen.getByTestId('search')).toBe(box)
     expect(onPick).not.toHaveBeenCalled()
   })
+  it('hides the results when the focus leaves the box, keeps the text, and shows them again on focus', () => {
+    render(<Search plan={plan} today="2026-10-16" onPick={() => {}} />)
+    const box = screen.getByTestId('search') as HTMLInputElement
+    fireEvent.focus(box)
+    fireEvent.change(box, { target: { value: 'bed' } })
+    expect(options()).toHaveLength(1)
+    fireEvent.blur(box)
+    expect(options()).toHaveLength(0)
+    expect(box.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByTestId('search-hint')).toBeNull()
+    expect(box.value).toBe('bed')
+    fireEvent.focus(box)
+    expect(options().map(o => o.getAttribute('data-node-id'))).toEqual(['build-bed'])
+    expect(box.getAttribute('aria-expanded')).toBe('true')
+  })
   it('shows each result\'s state and due date', () => {
     render(<Search plan={plan} today="2026-10-16" onPick={() => {}} />)
     fireEvent.change(screen.getByTestId('search'), { target: { value: 'build' } })

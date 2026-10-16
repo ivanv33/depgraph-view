@@ -15,16 +15,20 @@ export interface SearchProps {
 
 /**
  * Jump to a step by its title or id: an always-visible box. Typing filters the plan's steps (see searchSteps);
- * Up / Down move the highlight, Enter or a click picks that step and clears the box, Escape clears the box.
+ * Up / Down move the highlight, Enter or a click picks that step and clears the box, Escape clears the box. The
+ * results hide while the focus is elsewhere and the text stays for when it comes back.
  * Nothing in the plan changes.
  */
 export default function Search({ plan, today, onPick }: SearchProps) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
+  // The results hide while the focus is elsewhere (the text stays) and come back when the box takes it again.
+  const [away, setAway] = useState(false)
   const listId = useId()
   const states = useMemo(() => nodeStates(plan), [plan])
   // Every match is listed; the list scrolls, about eight rows tall.
-  const shown = useMemo(() => searchSteps(plan, query), [plan, query])
+  const matches = useMemo(() => searchSteps(plan, query), [plan, query])
+  const shown = away ? [] : matches
   const at = Math.min(active, Math.max(0, shown.length - 1))
   const optionId = (i: number) => `${listId}-opt-${i}`
   // The highlighted result stays in view as Up / Down move past the visible rows.
@@ -59,7 +63,10 @@ export default function Search({ plan, today, onPick }: SearchProps) {
         autoComplete="off"
         className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-1 text-sm max-sm:min-h-9"
         value={query}
+        onFocus={() => setAway(false)}
+        onBlur={() => setAway(true)}
         onChange={e => {
+          setAway(false)
           setQuery(e.target.value)
           setActive(0)
         }}
@@ -117,7 +124,7 @@ export default function Search({ plan, today, onPick }: SearchProps) {
           )
         })}
       </ul>
-      {query.trim() && (
+      {query.trim() && !away && (
         <>
           <p data-testid="search-hint" role="status" aria-live="polite" className="mt-1 px-1 text-[11px] text-white/40">
             {status}
