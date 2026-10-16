@@ -88,3 +88,17 @@ test('warnings are listed in a collapsed footer', async ({ page }) => {
   await w.locator('summary').click()
   await expect(w).toContainText('node "ghost-step": md not found')
 })
+
+test('shift+click on a label is a plain pick without onShiftLink', async ({ page }) => {
+  await page.goto(url)
+  await waitForStill(page)
+  await page.keyboard.down('Shift')
+  await expect(page.getByTestId('graph')).not.toHaveAttribute('data-shift', 'true')
+  await label(page, 'sow-beans').locator('.node-dot').click()
+  await expect(label(page, 'sow-beans')).toHaveAttribute('data-selected', 'true')
+  await expect(page.getByTestId('link-arrow')).toHaveCount(0)
+  await label(page, 'water-rota').locator('.node-dot').click()
+  await expect(label(page, 'water-rota')).toHaveAttribute('data-selected', 'true')
+  await expect(page).toHaveURL(/\?step=water-rota$/)
+  await page.keyboard.up('Shift')
+})

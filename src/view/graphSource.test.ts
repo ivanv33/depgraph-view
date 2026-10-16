@@ -7,7 +7,7 @@ describe('Graph and its companions keep the cut', () => {
     for (const f of ['Graph.tsx', 'ChainEdgeCue.tsx', 'DeckList.tsx']) {
       const src = readFileSync(join('src/view', f), 'utf8')
       expect(src, f).not.toMatch(/querySelector[^(]*\(\s*['"`]\[data-testid/)
-      expect(src, f).not.toMatch(/shiftLink|readyPlace|panelLayout|NodeHud|useHotkeys/)
+      expect(src, f).not.toMatch(/readyPlace|panelLayout|NodeHud|useHotkeys/)
     }
   })
   it('Graph keeps no app chrome: no app test ids, no bottom card gap past the host insets', () => {
@@ -19,6 +19,6 @@ describe('Graph and its companions keep the cut', () => {
     const src = readFileSync('src/view/Graph.tsx', 'utf8')
     const block = src.slice(src.indexOf('export interface GraphProps'), src.indexOf('}', src.indexOf('export interface GraphProps')))
     const names = [...block.matchAll(/^\s+(\w+)\??:/gm)].map(m => m[1]).sort()
-    expect(names).toEqual(['fitAll', 'focusFallback', 'grouped', 'insets', 'onGlides', 'onSelect', 'plan', 'selected', 'today'])
+    expect(names).toEqual(['fitAll', 'focusFallback', 'grouped', 'insets', 'onGlides', 'onSelect', 'onShiftLink', 'plan', 'selected', 'today'])
   })
 })

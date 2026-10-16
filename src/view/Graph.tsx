@@ -31,7 +31,9 @@ import { panToReveal } from '../engine/reveal.js'
 import { burstFrame, prefersReducedMotion, takeNewlyDone } from '../engine/effects.js'
 import { placeNodes, structureKey, toGraphData, type GraphLink, type GraphNode } from '../engine/graphData.js'
 import { backgroundAction } from '../engine/backgroundClick.js'
-import { DOT, labelFor, onSelectedText, stackLabels, syncLabels, type LabelNode } from '../engine/nodeLabel.js'
+import { DOT, labelFor, onSelectedText, pickModeOf, shakeLabel, stackLabels, syncLabels, type LabelNode, type PickMode } from '../engine/nodeLabel.js'
+import { shiftHeld } from '../engine/shiftHeld.js'
+import { idleLink, shiftLinkStep, type ShiftLinkEvent, type ShiftLinkState } from '../engine/shiftLink.js'
 import type { Plan, Status } from '../engine/schema.js'
 import { chainOf, neighboursOf } from '../engine/chain.js'
 import ChainEdgeCues, { type CueScene } from './ChainEdgeCue.js'
@@ -63,6 +65,11 @@ export interface GraphProps {
   plan: Plan
   selected: string | null
   onSelect: (id: string | null) => void
+  /**
+   * Given, Shift+click on a step and then on another links them: called with the step the first click was on and the one
+   * the second was on. Absent, Shift+click is a plain pick and nothing of the linking runs.
+   */
+  onShiftLink?: (from: string, to: string) => void
   /** Draw only the path to the selection and its subtree; every other branch is a deck. */
   grouped: boolean
   /** The local date (YYYY-MM-DD) due dates are read against. */
@@ -87,6 +94,8 @@ const idOf = (end: unknown) => (typeof end === 'string' ? end : (end as GraphNod
 const edgeKey = (source: string, target: string) => `${source}\u0000${target}`
 /** How often, at most, titles are fitted again while the view is still moving (once more when it stops), ms. */
 const TITLE_FIT_MS = 250
+/** A pending Shift+click link's arrow: drawn as a link from the selection to a step that needs it (linkStyle). */
+const LINK_ARROW = linkStyle('downstream', false)
 /** No done deck opened. */
 const NO_IDS: ReadonlySet<string> = new Set()
 
@@ -118,7 +127,7 @@ function glideEdge(
   obj.add(...next.children)
 }
 
-export default function Graph({ plan, selected: selectedId, onSelect, grouped: grouping, today, insets: given, fitAll, onGlides, focusFallback }: GraphProps) {
+export default function Graph({ plan, selected: selectedId, onSelect, grouped: grouping, today, insets: given, fitAll, onGlides, focusFallback, onShiftLink }: GraphProps) {
   // The host's insets, one object while their numbers hold (a host may pass a fresh object every render).
   const { top, right, bottom, left } = given
   const insets = useMemo<Insets>(() => ({ top, right, bottom, left }), [top, right, bottom, left])
@@ -210,10 +219,52 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   const pick = useRef(onSelect)
 
   const fallbackRef = useRef(focusFallback)
+  const shiftLinkRef = useRef(onShiftLink)
   useEffect(() => {
     pick.current = onSelect
     fallbackRef.current = focusFallback
+    shiftLinkRef.current = onShiftLink
   })
+  // Shift+click linking (shiftLink.ts), only while `onShiftLink` is given: the step a pending link starts at, kept in a
+  // ref for the listeners and in state for the arrow; the last pointer point is where the arrow ends.
+  const linkState = useRef<ShiftLinkState>(idleLink)
+  const [linkFrom, setLinkFrom] = useState<string | null>(null)
+  const pointerAt = useRef<{ x: number; y: number } | null>(null)
+  // Shift held (shiftHeld.ts): the crosshair cursor over the graph while it is.
+  const [shiftDown, setShiftDown] = useState(false)
+  const shiftLinking = onShiftLink !== undefined
+  useEffect(() => {
+    if (!shiftLinking) {
+      setShiftDown(false)
+      return
+    }
+    const on = (e: KeyboardEvent | FocusEvent) =>
+      setShiftDown(prev => shiftHeld(prev, { type: e.type as 'keydown' | 'keyup' | 'blur', key: (e as KeyboardEvent).key, shiftKey: (e as KeyboardEvent).shiftKey }))
+    window.addEventListener('keydown', on)
+    window.addEventListener('keyup', on)
+    window.addEventListener('blur', on)
+    return () => {
+      window.removeEventListener('keydown', on)
+      window.removeEventListener('keyup', on)
+      window.removeEventListener('blur', on)
+    }
+  }, [shiftLinking])
+  const linkTick = useRef<(() => void) | null>(null)
+  const arrowRef = useRef<SVGLineElement>(null)
+  const stepLink = useCallback(
+    (event: ShiftLinkEvent) => {
+      const { state, effect } = shiftLinkStep(linkState.current, event)
+      if (state !== linkState.current) {
+        linkState.current = state
+        setLinkFrom(state.from)
+      }
+      if (effect.type === 'shake') {
+        const el = labels.get(effect.id)
+        if (el) shakeLabel(el)
+      } else if (effect.type === 'link') shiftLinkRef.current?.(effect.from, effect.to)
+    },
+    [labels],
+  )
   // Done decks opened by a click, under the selection they were opened for: any other selection folds them again.
   const [openedDone, setOpenedDone] = useState<{ sel: string | null; ids: ReadonlySet<string> }>({ sel: null, ids: NO_IDS })
   // A selection that moves on (Escape, another step) drops them, so coming back to the step finds them folded.
@@ -233,8 +284,9 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   const listClosedOnCanvas = useRef<number | null>(null)
   useEffect(() => {
     // Registered before any list's own outside-press listener, so it runs first on every press.
-    const forget = () => {
+    const forget = (e: PointerEvent) => {
       listClosedOnCanvas.current = null
+      pointerAt.current = { x: e.clientX, y: e.clientY }
     }
     window.addEventListener('pointerdown', forget, true)
     return () => window.removeEventListener('pointerdown', forget, true)
@@ -255,8 +307,13 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   // A branch deck lists its steps in place on a click (a second click closes the list): picking one there selects
   // it, and the selection and the drawing stay as they are until then. A done deck hangs from a step already drawn: a
   // click opens it where it is, its steps drawn one by one, and the selection stays.
-  const onPick = useCallback((id: string) => {
+  const onPick = useCallback((id: string, mode?: PickMode) => {
     const parent = deckParent(id)
+    // Shift links two steps, only when the host takes links: else it is a plain pick. Any other pick ends a pending
+    // Shift+click link and goes on as ever.
+    if (mode === 'shift' && shiftLinkRef.current) return stepLink({ type: 'shiftPick', id, deck: parent !== null })
+    if (mode === 'shift') mode = undefined
+    stepLink({ type: 'plainPick' })
     if (parent && doneDecks.current.ids.has(id)) {
       const sel = doneDecks.current.sel
       setOpenedDone(prev => ({ sel, ids: new Set([...(prev.sel === sel ? prev.ids : []), id]) }))
@@ -1015,12 +1072,13 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       return
     }
     const onText = selectedId !== null && onSelectedText(labels, selectedId, e.clientX, e.clientY)
-    const action = backgroundAction({ shift: e.shiftKey, arming: false, linking: false, onText, detail: Math.max(e.detail, pressDetail.current) })
+    const action = backgroundAction({ shift: e.shiftKey, arming: false, linking: linkState.current.from !== null, onText, detail: Math.max(e.detail, pressDetail.current) })
     if (action === 'ignore') return
+    if (action === 'cancelLink') stepLink({ type: 'cancel' })
     // anything else but a click on the selected step's text deselects ('add' included: the viewer adds nothing)
-    if (action !== 'selected' || selectedId === null) onSelect(null)
+    else if (action !== 'selected' || selectedId === null) onSelect(null)
     // a click on the selected step's text is one on that step (never a deck)
-    else onPick(selectedId)
+    else onPick(selectedId, pickModeOf(e))
   }
 
   // How one edge is drawn now, its laid-out waypoints with it. A new function only when what an edge looks like
@@ -1270,7 +1328,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
               }
             },
           ],
-          [() => placeList?.(), () => scaleTick.current?.(), () => cueTick.current?.(), () => aimPlateHoles(labels)],
+          [() => placeList?.(), () => scaleTick.current?.(), () => cueTick.current?.(), () => linkTick.current?.(), () => aimPlateHoles(labels)],
         )
       } finally {
         meter.add('titleFit', fitMs, at)
@@ -1416,13 +1474,64 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       return { key, points, cards, selected: selectedId }
     }
   })
+  // A pending Shift+click link: an arrow from its step's circle (projected as cueScene does: it follows pans, zooms and
+  // glides) to the pointer, written on the frame tick only when it moves. It ends when Shift is released, the pointer
+  // moves without Shift (a keyup lost), the window loses focus, on Escape (only the link: the selection stays) and when
+  // its step is no longer drawn.
+  useEffect(() => {
+    if (linkFrom === null) return
+    const cancel = () => stepLink({ type: 'cancel' })
+    const onMove = (e: PointerEvent) => {
+      if (!e.shiftKey) return cancel()
+      pointerAt.current = { x: e.clientX, y: e.clientY }
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') cancel()
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      cancel()
+    }
+    let shown = ''
+    linkTick.current = () => {
+      const n = cache.get(linkFrom)
+      if (!labels.get(linkFrom)?.isConnected || n?.x === undefined || n.y === undefined) return cancel()
+      const camera = fgRef.current?.camera() as THREE.PerspectiveCamera | undefined
+      const line = arrowRef.current
+      const { w, h } = sizeRef.current
+      if (!line || !camera || !(w > 0 && h > 0)) return
+      const v = new THREE.Vector3(n.x - LAYOUT.cardW / 2 + DOT.cx, n.y, 0).project(camera)
+      const from = { x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h }
+      const to = pointerAt.current ?? from
+      const key = `${from.x},${from.y},${to.x},${to.y}`
+      if (key === shown) return
+      shown = key
+      line.setAttribute('x1', String(from.x))
+      line.setAttribute('y1', String(from.y))
+      line.setAttribute('x2', String(to.x))
+      line.setAttribute('y2', String(to.y))
+    }
+    window.addEventListener('pointermove', onMove, true)
+    window.addEventListener('keyup', onKeyUp, true)
+    window.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('blur', cancel)
+    return () => {
+      linkTick.current = null
+      window.removeEventListener('pointermove', onMove, true)
+      window.removeEventListener('keyup', onKeyUp, true)
+      window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('blur', cancel)
+    }
+  }, [linkFrom, stepLink, cache, labels])
   return (
     <div
       ref={rootRef}
       data-testid="graph"
       data-still="false"
       className="isolate"
-      style={{ cursor: 'default' }}
+      data-shift={onShiftLink ? shiftDown : undefined}
+      style={{ cursor: linkFrom !== null || shiftDown ? 'crosshair' : 'default' }}
       onPointerOver={onPointerOver}
       onPointerLeave={() => {
         setHoveredId(null)
@@ -1454,6 +1563,16 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
         // A dependency line is empty canvas for a click: the library sends one on a line to this prop, not the one above.
         onLinkClick={(_l: GraphLink, e: MouseEvent) => onEmptyCanvasClick(e)}
       />
+      {linkFrom !== null && (
+        <svg data-testid="link-arrow" aria-hidden="true" className="pointer-events-none fixed inset-0 h-full w-full">
+          <defs>
+            <marker id="link-arrow-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto">
+              <path d="M0,0 L10,5 L0,10 z" fill={LINK_ARROW.color} />
+            </marker>
+          </defs>
+          <line ref={arrowRef} stroke={LINK_ARROW.color} strokeWidth={LINK_ARROW.width} strokeLinecap="round" markerEnd="url(#link-arrow-head)" />
+        </svg>
+      )}
       {listDeck && listLook && (
         <DeckList
           key={listDeck.id}
@@ -1468,11 +1587,13 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
             // The focus goes on to the step picked, once it is drawn.
             listExit.current = true
             focusSoon([id])
+            stepLink({ type: 'plainPick' })
             pick.current(id)
           }}
           onOpenBranch={() => {
             listExit.current = true
             focusSoon([listDeck.parentId])
+            stepLink({ type: 'plainPick' })
             pick.current(listDeck.parentId)
           }}
           onClose={closeList}
