@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import Legend from './Legend.js'
 
 afterEach(cleanup)
@@ -62,5 +62,27 @@ describe('Legend', () => {
     expect(cls).toContain('sm:block')
     expect(cls).toContain('left-4')
     expect(cls).toContain('bottom-16')
+  })
+
+  it('makes the Ready and Doing rows buttons only when list is given', () => {
+    render(<Legend counts={counts} />)
+    expect(screen.queryByTestId('legend-open-ready')).toBeNull()
+    cleanup()
+    render(<Legend counts={counts} list={{ open: false, onToggle: vi.fn(), controls: 'ready-list' }} />)
+    expect(screen.getByTestId('legend-open-ready').tagName).toBe('BUTTON')
+    expect(screen.getByTestId('legend-open-doing').tagName).toBe('BUTTON')
+    expect(screen.queryByTestId('legend-open-waiting')).toBeNull()
+    expect(screen.getByTestId('legend-count-ready').textContent).toBe('3')
+  })
+
+  it('the toggle says whether the list is open, names the list it opens, and calls onToggle', () => {
+    const onToggle = vi.fn()
+    render(<Legend counts={counts} list={{ open: true, onToggle, controls: 'ready-list' }} />)
+    const b = screen.getByTestId('legend-open-ready')
+    expect([b.getAttribute('aria-expanded'), b.getAttribute('aria-controls')]).toEqual(['true', 'ready-list'])
+    expect(b.getAttribute('aria-label')).toBe('Ready: 3 steps. Show what can be worked on now')
+    expect(screen.getByTestId('legend-open-doing').getAttribute('aria-label')).toBe('Doing: 1 step. Show what can be worked on now')
+    fireEvent.click(b)
+    expect(onToggle).toHaveBeenCalledTimes(1)
   })
 })

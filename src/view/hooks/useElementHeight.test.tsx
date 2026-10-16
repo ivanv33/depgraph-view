@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { useElementEdge } from './useElementHeight.js'
+import { useElementEdge, useElementHeight } from './useElementHeight.js'
 
 // jsdom has no layout and no ResizeObserver: a fake one that the test fires by hand, and each element's bottom set by hand.
 const observers = new Set<FakeResizeObserver>()
@@ -193,5 +193,27 @@ describe('useElementEdge', () => {
     expect(result.current).toBe(400)
     rerender({ on: false })
     expect(result.current, 'forgotten once inactive').toBeNull()
+  })
+})
+
+describe('useElementHeight', () => {
+  const tall = (el: HTMLElement, h: number) => Object.defineProperty(el, 'offsetHeight', { configurable: true, value: h })
+  it("reports the element's height at once, and its growth after the debounce", async () => {
+    const el = card(0); tall(el, 120); document.body.append(el)
+    const { result } = renderHook(() => useElementHeight(SEL, true))
+    await flush(0)
+    expect(result.current).toBe(120)
+    tall(el, 150); for (const o of observers) o.fire(el)
+    await flush(100); expect(result.current).toBe(120)
+    await flush(100); expect(result.current).toBe(150)
+  })
+  it('keeps its last height once inactive, and a window resize alone does not measure it', async () => {
+    const el = card(0); tall(el, 120); document.body.append(el)
+    const { result, rerender } = renderHook(({ on }) => useElementHeight(SEL, on), { initialProps: { on: true } })
+    await flush(0)
+    tall(el, 180); window.dispatchEvent(new Event('resize'))
+    await flush(); expect(result.current).toBe(120)
+    rerender({ on: false }); await flush()
+    expect(result.current).toBe(120)
   })
 })

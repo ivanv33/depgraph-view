@@ -63,4 +63,10 @@ describe('package exports', () => {
     for (const s of ['.node-dot {', '--mark-h:', '.glass {', '.deck-list {', 'dg-shake']) expect(css).not.toContain(s)
     for (const s of ['color-scheme: dark;', 'body {', 'button:focus-visible', '.md {', '.panel-section-label {']) expect(css).toContain(s)
   })
+
+  it('the root exports the app-facing pieces', () => {
+    const index = read('src/view/index.ts').replace(/from\s+'[^']*'/g, '') // text: importing `.` would load react-force-graph-3d; module paths must not satisfy the match
+    for (const name of ['PriorityMark', 'PriorityMarkProps', 'STATE_NAME', 'STATE_SWATCH', 'LegendList', 'useGrouping', 'useToday',
+      'useElementHeight', 'useElementEdge', 'WindowEdge']) expect(index, name).toMatch(new RegExp(`\\b${name}\\b`))
+  })
 })
