@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -9,6 +10,7 @@ import { COMMON_KEYS, splitNodeFile } from './server/frontmatter.js'
 import { loadGraphFile, resolveGraphPath, type LoadResult } from './server/loader.js'
 import { parseGraphYaml } from './server/planYaml.js'
 import { USAGE } from './cli/args.js'
+import { summaryLine, VALIDATE_EXIT } from './cli/validate.js'
 
 // The repo root from this file, as in pack.test.ts.
 const repo = fileURLToPath(new URL('..', import.meta.url))
@@ -381,6 +383,52 @@ describe('references/viewer.md', () => {
     expect(md).toMatch(/#v\d+\.\d+\.\d+/)
     for (const code of ['`0`', '`1`', '`2`']) expect(md, code).toContain(code)
     expect(md).toContain('--no-watch --port 0')
+    expect(md, 'the whole usage, as --help prints it').toContain(`\`\`\`text\n${USAGE}\n\`\`\``)
+  })
+})
+
+/** The school play plan and a card at each step, as files under `play/`. */
+function playFiles(): Record<string, string> {
+  const text = read(SKILL_MD)
+  const play = fences(text, 'yaml').find(b => (parse(b) as { name?: unknown } | null)?.name === 'Spring school play')!
+  const files: Record<string, string> = { 'play/play.yaml': play }
+  for (const id of PLAY_IDS) files[`play/nodes/${id}.context/${id}.md`] = fences(text, 'markdown')[0]
+  return files
+}
+
+describe('the check is validate', () => {
+  const command = `npx --yes ${pkg.repository}#v${pkg.version} validate play`
+
+  it('SKILL.md and viewer.md give the validate command, and no file checks with a serving run', () => {
+    for (const rel of [SKILL_MD, VIEWER_MD]) expect(fences(read(rel), 'sh'), rel).toContain(`${command}\n`)
+    for (const f of skillFiles()) expect(f.text, f.path).not.toMatch(/check run/)
+    const check = read(SKILL_MD).split('### Check the plan')[1].split('## Showing the plan')[0]
+    expect(check).not.toMatch(/--port|--no-watch|kill/)
+  })
+
+  it('the exit codes in SKILL.md and viewer.md are the CLI\'s', () => {
+    const skill = read(SKILL_MD)
+    expect(skill).toContain(`- \`${VALIDATE_EXIT.clean}\`: the plan loads with no warnings.`)
+    expect(skill).toContain(`- \`${VALIDATE_EXIT.warnings}\`: the plan loads, with warnings.`)
+    expect(skill).toContain(`- \`${VALIDATE_EXIT.refused}\`: the plan is refused`)
+    const viewer = read(VIEWER_MD)
+    expect(viewer).toContain(`- Exit \`${VALIDATE_EXIT.clean}\`: the plan loads with no warnings.`)
+    expect(viewer).toContain(`- Exit \`${VALIDATE_EXIT.warnings}\`: the plan loads, with warnings.`)
+    expect(viewer).toContain(`- Exit \`${VALIDATE_EXIT.refused}\`: the plan is refused`)
+    expect(viewer).toContain(`\`${summaryLine('<name>', 2, 2, 0).replace('2 steps, 2 links', 'N steps, M links')}\``)
+  })
+
+  it('the summary line in SKILL.md is what validate prints for the school play', () => {
+    const r = loadIn(playFiles(), 'play')
+    const line = summaryLine(r.plan.name, r.plan.nodes.length, r.plan.nodes.reduce((n, x) => n + x.depends_on.length, 0), r.warnings.length)
+    expect(line).toBe('Spring school play: 8 steps, 9 links, no warnings')
+    expect(read(SKILL_MD)).toContain(`\`${line}\``)
+  })
+
+  it.skipIf(!existsSync(join(repo, 'lib/cli/validate.js')))('the built CLI prints that line and exits 0 for the school play', () => {
+    const dir = makeFolder(playFiles())
+    const r = spawnSync(process.execPath, [join(repo, 'bin/depgraph-view.js'), 'validate', 'play'], { cwd: dir, encoding: 'utf8', timeout: 10000 })
+    expect({ status: r.status, stdout: r.stdout, stderr: r.stderr }).toEqual({ status: VALIDATE_EXIT.clean, stdout: 'Spring school play: 8 steps, 9 links, no warnings\n', stderr: '' })
   })
 })
 

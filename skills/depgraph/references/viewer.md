@@ -1,6 +1,6 @@
 # Running the viewer
 
-Everything the skill needs to know about the viewer's command line, ports, network access and stopping. Each statement here is what the viewer's code does at this release.
+Everything the skill needs to know about the viewer's command line, the `validate` check, ports, network access and stopping. Each statement here is what the viewer's code does at this release.
 
 ## The command
 
@@ -14,12 +14,16 @@ The usage, as `--help` prints it:
 
 ```text
 usage: depgraph-view <path> [--port N] [--host ADDR] [--open] [--no-watch]
+       depgraph-view validate <path> [--json]
 
   <path>       a plan YAML file, or a folder holding it
   --port N     serve on port N (0-65535); without it the first free port from 4310
   --host ADDR  bind ADDR (default 127.0.0.1); 0.0.0.0 serves the whole network
   --open       open the page in the default browser
   --no-watch   serve the graph as loaded, without following file changes
+  validate     load the plan once and exit, serving nothing: problems on stderr,
+               a summary on stdout; exit 0 clean, 1 with warnings, 2 refused
+  --json       with validate, print the summary as one JSON object
   -h, --help   show this help
 ```
 
@@ -35,13 +39,21 @@ Run it in the background so the session stays free, and read the URL from its ou
 
 Where the output goes: use the session tool's own background-run feature when it has one; it keeps stdout, stderr and the stop control. Otherwise redirect stdout and stderr, and save `$!` (the npx pid), to files in one scratch place of the session's own: its scratch directory if it has one, else a fresh `mktemp -d`. Never put them inside the plan folder, and never in fixed-name files under `/tmp`. Name that place to the user once, and delete nothing in it.
 
-## The check run
+## The check: `validate`
 
 ```sh
-npx --yes github:ivanv33/depgraph-view#v0.3.0 play --no-watch --port 0
+npx --yes github:ivanv33/depgraph-view#v0.3.0 validate play
 ```
 
-`--port 0` lets the operating system pick a free port, so it never clashes; `--no-watch` loads the plan once and does not follow the files. It still serves until stopped: read stdout and stderr, then stop it as in "Stopping". Never add `--host` to the check run.
+`validate` loads the plan once with the viewer's own loader and exits. It binds no port, opens no browser and follows no files, so it needs no background run, no scratch files and no stopping: run it in the foreground and read its exit code and output.
+
+- Exit `0`: the plan loads with no warnings. stdout is one line, `<name>: N steps, M links, no warnings`, with the plan's `name`, its step count and its `needs` links.
+- Exit `1`: the plan loads, with warnings. stderr has one `warning: <message>` line per warning, the same lines the viewer prints at start, and the stdout line ends `N warnings` (`1 warning` for one).
+- Exit `2`: the plan is refused, the path is not found, the folder holds no plan file, or the command line is wrong. stderr has one line, `depgraph-view: <message>` (for a wrong command line, the message and the usage), and stdout is empty.
+
+Every message is in the tables of `references/format.md`. With `--json`, stdout is one JSON object instead of the summary line, `{"name": ..., "steps": N, "links": M, "warnings": [...], "errors": [...]}`, where a refused plan has `name` `null` and its message in `errors`; stderr is the same either way. A plan folder that is itself named `validate` is passed as `./validate`.
+
+A serving run with `--no-watch --port 0` still loads the plan, but it serves until stopped: use it only to show a snapshot, never to check.
 
 ## Live reload
 
@@ -98,9 +110,11 @@ Use `--host` only when the user asks to open the plan from another device:
 
   With such a bind the Host check is off: anyone who can reach the port can read the plan, every card and every file in every step's folder.
 - Tell the user that in plain words before starting, and start only once they confirm.
-- Never use `--host` for the check run.
+- Never use `--host` for `validate`; it takes no `--host`.
 
 ## Exit codes
+
+For `validate`, see "The check: `validate`": `0` clean, `1` with warnings, `2` refused or a usage error. For a serving run:
 
 - `0`: stopped cleanly by Ctrl-C, SIGINT or SIGTERM, or `--help` printed the usage.
 - `1`: could not start. The plan was refused, the path was not found, the port is in use, or the host could not be bound. The `depgraph-view: <message>` line says which.
