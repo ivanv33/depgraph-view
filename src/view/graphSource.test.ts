@@ -10,6 +10,11 @@ describe('Graph and its companions keep the cut', () => {
       expect(src, f).not.toMatch(/shiftLink|readyPlace|panelLayout|NodeHud|useHotkeys/)
     }
   })
+  it('Graph keeps no app chrome: no app test ids, no bottom card gap past the host insets', () => {
+    const src = readFileSync('src/view/Graph.tsx', 'utf8')
+    expect(src).not.toMatch(/node-panel|node-hud/)
+    expect(src, 'the cue area and the measured area end at the host bottom inset (<= the view height)').not.toMatch(/FRAME\.hudGap|FRAME\.hudBottom/)
+  })
   it('Graph declares exactly the cut props', () => {
     const src = readFileSync('src/view/Graph.tsx', 'utf8')
     const block = src.slice(src.indexOf('export interface GraphProps'), src.indexOf('}', src.indexOf('export interface GraphProps')))

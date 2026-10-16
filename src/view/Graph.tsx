@@ -35,7 +35,7 @@ import { DOT, labelFor, onSelectedText, stackLabels, syncLabels, type LabelNode 
 import type { Plan, Status } from '../engine/schema.js'
 import { chainOf, neighboursOf } from '../engine/chain.js'
 import ChainEdgeCues, { type CueScene } from './ChainEdgeCue.js'
-import { cueAreaBottom, type CuePoint } from '../engine/edgeCue.js'
+import type { CuePoint } from '../engine/edgeCue.js'
 import { edgeOpacity, linkRole, linkStyle } from '../engine/linkStyle.js'
 import { deckLabel, deckParent, deckView } from '../engine/grouping.js'
 import { layoutInput } from '../engine/drawnInput.js'
@@ -307,14 +307,15 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     [labels],
   )
   // Escape folds the done decks opened under this selection again (the selection stays); a second Escape closes the
-  // selection as before. Not while typing, or working in the side panel or the bottom card.
+  // selection as before. Not while typing, nor for an Escape pressed in the host's own controls (outside this graph).
   const openedAny = opened.size > 0
   useEffect(() => {
     if (!openedAny) return
     const onKey = (e: KeyboardEvent) => {
       // An open list takes this Escape (it closes the list, one level at a time): it is not this one's.
       if (e.key !== 'Escape' || e.defaultPrevented || listedRef.current || isTypingTarget(e.target)) return
-      if (e.target instanceof Element && e.target.closest('[data-testid="node-panel"], [data-testid="node-hud"]')) return
+      // Only an Escape on the page itself or inside this graph is the graph's: the host's own controls keep theirs.
+      if (e.target instanceof Element && e.target !== document.body && !rootRef.current?.contains(e.target)) return
       e.preventDefault()
       e.stopPropagation()
       setOpenedDone({ sel: selectedId, ids: NO_IDS })
@@ -716,14 +717,14 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     const statusOf = (id: string) => plan.nodes.find(n => n.id === id)?.status
     // Which steps of what is framed are in view (not under a strip, not off the window), from where the camera is now
     // and in the view as it is now; null with no camera yet. What counts is what the user reads: with a selection each
-    // unfinished chain step's circle and the slot its words run along, against the card's real top edge (the frame's
-    // gap above the card may be crossed); with nothing selected every drawn step's circle.
+    // unfinished chain step's circle and the slot its words run along, inside the host's insets; with nothing selected
+    // every drawn step's circle.
     measureRef.current = () => {
       const camera = fgRef.current?.camera()
       if (camera === undefined) return null
       const viewSize = sizeRef.current
       const strips = frameInsets(viewSize, insets)
-      const area = selectedId === null ? strips : { ...strips, bottom: strips.bottom - FRAME.hudGap }
+      const area = strips
       const ids = selectedId === null ? [...layout.nodes.keys()] : [selectedId, ...near.upstream, ...near.downstream]
       let all = 0
       const inView = new Set<string>()
@@ -1336,13 +1337,12 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   // projected from the camera, read on the frame tick.
   const cueStrips = frameInsets(size, insets)
   const cueArea = useMemo(
-    // above the bottom card, unless that card is about as tall as the window: then down to its bottom edge, the card a
-    // cover over the area (cueAreaBottom)
+    // the view less the host's insets (and the legend's strip), as a selection is framed in
     () => ({
       left: cueStrips.left,
       top: cueStrips.top,
       right: size.w - cueStrips.right,
-      bottom: cueAreaBottom(cueStrips.top, size.h - (cueStrips.bottom - FRAME.hudGap), size.h - FRAME.hudBottom),
+      bottom: size.h - cueStrips.bottom,
     }),
     [cueStrips.left, cueStrips.top, cueStrips.right, cueStrips.bottom, size.w, size.h],
   )
