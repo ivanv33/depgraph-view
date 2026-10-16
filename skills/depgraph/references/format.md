@@ -37,7 +37,7 @@ Each key under `nodes` is a step id, and its value is empty (`buy-flour:` or `bu
 
 An id matches `^[a-z0-9][a-z0-9-]*$`: lower-case letters, digits and hyphens, not starting with a hyphen. Each id appears once; a repeated id is a repeated key, which refuses the file.
 
-An id that YAML reads as something other than a string (a number such as `2027`, or `true`) is refused with a hint to quote it. Quote it as a key and in every `needs` list that names it:
+An id that YAML reads as something other than a string is refused. When quoting it would make a valid id (a number such as `2027`, or `true`), the message says to quote it; otherwise (`1.5`) it asks for a string. Quote it as a key and in every `needs` list that names it:
 
 ```yaml
 name: Kitchen refit
@@ -86,7 +86,7 @@ Card errors of the value kind (a wrong `title`, `description`, `status`, `tags`,
 
 ## Where messages appear
 
-At startup, a refused plan prints `depgraph-view: <message>` on stderr and exits with code 1. A plan that loads prints its URL on stdout and each warning as `warning: <message>` on stderr; the page also lists the warnings in a collapsed list in its bottom-left corner. While the viewer watches the files, a change that breaks the plan shows the message in a banner on the page, which keeps showing the last plan that loaded; after a good reload the page's warnings list is the current one (stderr lines are printed only at startup).
+At startup, a refused plan prints `depgraph-view: <message>` on stderr and exits with code 1. A plan that loads prints its URLs on stdout and each warning as `warning: <message>` on stderr; the page also lists the warnings in a collapsed list in its bottom-left corner. While the viewer watches the files, a change that breaks the plan shows the message in a banner on the page, which keeps showing the last plan that loaded; after a good reload the page's warnings list is the current one (stderr lines are printed only at startup).
 
 A YAML syntax error in the plan file is prefixed with the file's name (`kitchen.yaml: `); every message about one step or card starts `node "<id>": `. The tables give each message exactly as printed after `depgraph-view: ` or `warning: `. In them, `<...>` stands for a name, an id or a list, and `L`, `C` and `N` stand for numbers.
 
