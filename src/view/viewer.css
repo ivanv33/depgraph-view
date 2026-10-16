@@ -1,0 +1,567 @@
+@import "tailwindcss" source(".");
+
+:root {
+  color-scheme: dark;
+  /* The priority mark's size, the one place its numbers live (MARK_EM and MARK_MIN_PX in src/lib, PRIORITY_MARK's 8 x 7
+     glyph; a test holds them equal). In em of the text the mark sits in: the em resolves where a rule reads them. */
+  --mark-h: 0.8em;
+  --mark-w: calc(var(--mark-h) * 8 / 7);
+  --mark-gap: 0.35em;
+  --mark-min-w: 8px;
+  --mark-min-h: 7px;
+}
+body { margin: 0; }
+
+body { font-family: 'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif; }
+
+.glass {
+  background: linear-gradient(160deg, rgb(20 24 36 / 0.62), rgb(8 10 16 / 0.72));
+  border: 1px solid rgb(160 190 255 / 0.14);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 255 255 / 0.06);
+  backdrop-filter: blur(14px) saturate(1.3);
+}
+
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid rgb(90 200 250 / 0.7);
+  outline-offset: 1px;
+}
+
+/* The positioned element CSS2DRenderer moves (it owns `transform`); the visible card is inside it. Only the circle and
+   the visible words take the pointer (below), never the rest of the slot, which at whole-plan zoom reaches over the
+   next step's circle; labels stack left to right (stackLabels in nodeLabel.ts), so a circle wins over a neighbour's words. */
+.node-label {
+  pointer-events: none;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.node-dot,
+.node-deck-dot,
+.node-label-title,
+.node-label-due,
+.node-deck-list li { pointer-events: auto; }
+/* One layout slot: 170 x 44 units at scale 1, with no box of its own; the node is the dot and the text
+   beside it (.node-label-text, which may run past the slot). `zoom` (not transform) so the outer box follows the size.
+   --near-scale (set per label from its due date: 1.3 due soon down to 0.85 far off) sizes it at every zoom; `left`
+   moves the scaled card back so its dot (18px from the left edge) stays where an unscaled one would, on its column. */
+.node-card {
+  /* how many times its size the card draws; the priority mark reads it to keep a minimum size on screen */
+  --card-zoom: calc(var(--label-scale, 1) * var(--near-scale, 1));
+  zoom: var(--card-zoom, 1);
+  position: relative;
+  left: calc((1 - 1 / var(--near-scale, 1)) * 67px);
+  box-sizing: border-box;
+  width: 170px;
+  height: 44px;
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: normal;
+  text-align: left;
+  /* titles stay readable where an edge runs behind them */
+  text-shadow: 0 0 3px #05060a, 0 0 6px #05060a, 0 1px 0 #05060a;
+  transition: filter 120ms ease-out;
+}
+/* The title and the due line: 150px wide from 40px in, so 20px past the slot into the column gap, as many
+   lines as the title needs, centred on the dot. */
+.node-label-text {
+  position: absolute;
+  left: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 150px;
+  overflow: visible;
+}
+/* The circle. Numbers repeat DOT in src/lib/nodeLabel.ts: centre 18px from the slot's left edge; the radius
+   is --dot-r (set per label from the due date, 7 far to 16 near, 11 undated); edges meet it 18px above
+   or below the slot centre. Priority is not drawn here: it is the bars before the title (.node-prio). */
+.node-label { --dot-r: 11px; }
+.node-dot {
+  position: absolute;
+  left: calc(18px - var(--dot-r));
+  top: calc(50% - var(--dot-r));
+  box-sizing: border-box;
+  width: calc(var(--dot-r) * 2);
+  height: calc(var(--dot-r) * 2);
+  border-radius: 50%;
+  background: var(--state-color, #8b95a7);
+  /* --ring is the hover / open-deck / selected dark-gap shadow */
+  box-shadow: var(--ring, 0 0 #0000);
+}
+/* A deck: copies of the dot fanned out behind it (--deck-i is the copy's place, --deck-dx right and --deck-dy down
+   each; both set per label from DECK_FAN in nodeLabel.ts), the text block moved clear of the fan (--deck-n circles). */
+.node-card { isolation: isolate; }
+.node-dot { z-index: 1; }
+.node-deck-dot {
+  position: absolute;
+  left: calc(18px - var(--dot-r) + var(--deck-i) * var(--deck-dx));
+  top: calc(50% - var(--dot-r) + var(--deck-i) * var(--deck-dy));
+  box-sizing: border-box;
+  width: calc(var(--dot-r) * 2);
+  height: calc(var(--dot-r) * 2);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--state-color, #8b95a7) calc(100% - var(--deck-i) * 12%), #05060a);
+  box-shadow: 0 0 0 1.5px #05060a;
+  z-index: calc(1 - var(--deck-i));
+}
+.node-label[data-deck='true'] .node-label-text {
+  left: calc(40px + (var(--deck-n, 1) - 1) * var(--deck-dx));
+  width: calc(150px - (var(--deck-n, 1) - 1) * var(--deck-dx));
+}
+.node-deck-list {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: calc(10px * var(--title-boost, 1));
+  line-height: 1.25;
+  color: #aab2c2;
+}
+/* One line per member (DECK_TEXT in nodeLabel.ts counts on it): the layout reserves the list's height; drawn larger
+   for the boost, the deck lists fewer (deckScale in titleFitDom.ts). */
+.node-deck-list li { width: fit-content; max-width: 100%; padding: 1px 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A member title picks that step. */
+.node-deck-list li[data-member-id]:hover { color: #fff; text-decoration: underline; }
+/* How many of a deck's steps are in each state, each count in its state's colour; one line, reserved even when empty
+   (DECK_TEXT.mix in nodeLabel.ts counts on it). */
+.node-deck-mix { display: block; height: calc(12.5px * var(--title-boost, 1)); font-size: calc(10px * var(--title-boost, 1)); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #8b95a7; }
+.node-deck-mix [data-state='ready'] { color: #6ee7a0; }
+.node-deck-mix [data-state='blocked'] { color: #ff6b6b; }
+.node-deck-mix [data-state='doing'] { color: #5ac8fa; }
+.node-deck-mix [data-state='waiting'] { color: #aab2c2; }
+.node-deck-mix [data-state='done'] { color: #7d8699; }
+/* A step inside can be started now though the deck is painted another state: a small green marker on its circle. */
+.node-label[data-deck-ready='true'] .node-dot::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 9px;
+  height: 9px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: #6ee7a0;
+  border: 1.5px solid #05060a;
+}
+/* "+N more" is not a step: it lists every step of the deck, so it reads as a small control instead. */
+.node-deck-list .node-deck-more {
+  display: inline-block;
+  margin-top: 1px;
+  padding: 0 5px;
+  border: 1px solid rgb(139 149 167 / 0.4);
+  border-radius: 8px;
+  color: #8b95a7;
+}
+.node-deck-list .node-deck-more::after { content: ' \25B8'; }
+.node-deck-list .node-deck-more:hover { color: #5ac8fa; border-color: rgb(90 200 250 / 0.6); }
+.node-label-title {
+  /* the priority mark, then the words: a long title wraps beside the mark, never under it */
+  display: flex;
+  align-items: flex-start;
+  /* as wide as its longest line, so the empty end of the text block is not part of the step */
+  width: fit-content;
+  max-width: 100%;
+  white-space: normal;
+}
+.node-label-words { min-width: 0; overflow-wrap: anywhere; }
+/* The priority mark (src/lib/priorityMark.ts): fixed light colours, so it never takes the state colour, and sized in em
+   of the text beside it (--mark-h and the rest, on :root). Nothing about it animates. */
+.priority-mark {
+  display: inline-block;
+  flex: none;
+  width: var(--mark-w);
+  height: var(--mark-h);
+  overflow: visible;
+}
+/* On a graph label: one title line tall and centred on the first line. It shrinks with the card but never below 8 x 7 px
+   on screen (MARK_MIN_PX), so at whole-plan zoom it stays three countable bars rather than a speck. It is not faded by
+   the due-date haze (the words are), only dimmed with the card when the step is done or off the selected path. */
+.node-prio {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 1.2em;
+  margin-right: var(--mark-gap);
+}
+.node-prio:empty { display: none; }
+.node-prio .priority-mark {
+  width: max(var(--mark-w), calc(var(--mark-min-w) / var(--card-zoom, 1)));
+  height: max(var(--mark-h), calc(var(--mark-min-h) / var(--card-zoom, 1)));
+}
+/* A deck's member rows: the member's own mark before its title, at the row's size. */
+.node-deck-list .priority-mark { margin-right: var(--mark-gap); vertical-align: -0.05em; }
+/* a done member's bars dim as a done step's card does */
+.node-deck-list li[data-done='true'] .priority-mark { filter: brightness(0.7); }
+/* Due date as distance: --haze (1 near, overdue, selected or on the chain; down to 0.4 far off) fades and
+   greys the dot and the words (never the priority mark). It sits on the children so the card's done / dim brightness
+   still applies. */
+.node-dot,
+.node-deck-dot,
+.node-label-words,
+.node-label-due {
+  opacity: var(--haze, 1);
+  filter: saturate(var(--haze, 1));
+}
+.node-label-due {
+  width: fit-content;
+  max-width: 100%;
+  font-size: 10px;
+  line-height: 1.2;
+  color: #8b95a7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.node-label-due:empty { display: none; }
+/* A date taken from a step that needs this one ("by Nov 1"): italic, so it never reads as the step's own. */
+.node-label[data-due-inherited='true'] .node-label-due { font-style: italic; }
+/* Overdue: a red ring outside the chain outline (2px outline + 2px offset = 4px), inside the selected brackets. */
+.node-label[data-overdue='true'] .node-dot::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  border: 2px solid #ff6b6b;
+  pointer-events: none;
+}
+.node-label[data-status='todo'] { color: #c3cad6; }
+.node-label[data-status='doing'] { color: #5ac8fa; }
+.node-label[data-status='done'] { color: #7d8699; }
+.node-label[data-status='blocked'] { color: #ff6b6b; }
+.node-label[data-state='ready'] { --state-color: #6ee7a0; color: #b9f5d0; }
+.node-label[data-state='doing'] { --state-color: #5ac8fa; }
+.node-label[data-state='waiting'] { --state-color: #8b95a7; }
+.node-label[data-state='blocked'] { --state-color: #ff6b6b; }
+.node-label[data-state='done'] { --state-color: #3a4152; }
+/* Dimming darkens instead of fading so the dot stays opaque and no edge shows through it. */
+.node-label[data-state='done'] .node-card { filter: brightness(0.7); }
+.node-label[data-chain='up'] .node-dot { outline: 2px solid #ffb454; outline-offset: 2px; }
+.node-label[data-chain='down'] .node-dot { outline: 2px solid #5ac8fa; outline-offset: 2px; }
+.node-label[data-dim='true'] .node-card { filter: brightness(0.35); }
+.node-label:hover .node-dot { --ring: 0 0 0 2px rgb(255 255 255 / 0.45); }
+.node-label[aria-expanded='true'] .node-dot { --ring: 0 0 0 2px #05060a, 0 0 0 4px rgb(255 255 255 / 0.55); }
+/* The selected step: square corner brackets around its circle (.node-mark) and its words on a dark plate. Every other
+   signal on a circle is round (hover, chain, overdue) or dashed (held), so the square reads as the selection by shape.
+   Both keep a size on screen at any zoom: --z is how much the card is drawn larger than its slot, and the brackets
+   are 44px on screen (else just clear of the overdue ring) where no other circle is that near, 2.5px thick; the words are drawn --boost times
+   larger so the title is never under 12px on screen. Nothing here moves a circle or takes the pointer. */
+.node-label[data-selected='true'] {
+  --z: calc(var(--label-scale, 1) * var(--near-scale, 1));
+  /* no wider than the room before the nearest other circle (--mark-room, set by titleFitDom.ts), so on a crowded plan
+     they hold this circle alone, but never inside its own ring (--mark-ring: its 2px gap, or the overdue ring) */
+  --mark-ring: 2px;
+  --mark: max(
+    min(max(calc(44px / var(--z)), calc(var(--dot-r) * 2 + 20px)), var(--mark-room, 100000px)),
+    calc((var(--dot-r) + var(--mark-ring)) * 2 + 8px / var(--z))
+  );
+  --boost: max(1, calc(12 / (13 * var(--z))));
+  /* its plate has its own boost (below), never the zoomed-out one every other title takes */
+  --title-boost: 1;
+}
+.node-label[data-selected='true'][data-overdue='true'] { --mark-ring: 9px; }
+.node-label[data-selected='true'] .node-dot { --ring: 0 0 0 2px #05060a; }
+.node-label[data-selected='true'] .node-label-title { font-weight: 600; }
+.node-mark { display: none; }
+.node-label[data-selected='true'] .node-mark {
+  --c: #eef3ff;
+  --t: calc(2.5px / var(--z));
+  --l: calc(var(--mark) * 0.3);
+  display: block;
+  position: absolute;
+  z-index: 2;
+  left: calc(18px - var(--mark) / 2);
+  top: calc(50% - var(--mark) / 2);
+  width: var(--mark);
+  height: var(--mark);
+  pointer-events: none;
+  background:
+    linear-gradient(var(--c), var(--c)) left top / var(--l) var(--t),
+    linear-gradient(var(--c), var(--c)) left top / var(--t) var(--l),
+    linear-gradient(var(--c), var(--c)) right top / var(--l) var(--t),
+    linear-gradient(var(--c), var(--c)) right top / var(--t) var(--l),
+    linear-gradient(var(--c), var(--c)) left bottom / var(--l) var(--t),
+    linear-gradient(var(--c), var(--c)) left bottom / var(--t) var(--l),
+    linear-gradient(var(--c), var(--c)) right bottom / var(--l) var(--t),
+    linear-gradient(var(--c), var(--c)) right bottom / var(--t) var(--l);
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 calc(1px / var(--z)) #05060a);
+  animation: dg-mark-in 220ms ease-out;
+}
+/* One short answer to the click: the brackets close in on the circle. The resting state carries the meaning alone. */
+@keyframes dg-mark-in {
+  from { transform: scale(1.6); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .node-label[data-selected='true'] .node-mark { animation: none; }
+}
+/* The words: right of the brackets, on a plate that covers what lies beneath; the plate (6px of padding past the
+   words' left) starts 3px on screen right of the brackets. Where `zoom` works (below) they are also drawn --boost
+   times larger; without it they stay at the zoom's size but in the same place. */
+.node-label[data-selected='true'] .node-label-text {
+  left: max(40px, calc(18px + var(--mark) / 2 + 3px / var(--z) + 6px));
+  /* as wide as the words up to the usual 150px (they wrap as they would there; not fit-content, which would also
+     shrink to the room left in the slot), so the plate ends where they do */
+  width: max-content;
+  /* narrower where another circle would be under it (--plate-w, titleFitDom.ts): the words wrap, never cut; and moved up
+     or down (--plate-dy) off a circle in the row above or below */
+  max-width: min(150px, var(--plate-w, 150px));
+  transform: translateY(calc(-50% + var(--plate-dy, 0px)));
+  margin: -2px -6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgb(5 6 10 / 0.92);
+  box-shadow: 0 0 0 1px rgb(238 243 255 / 0.22);
+}
+/* zoom scales the block's own offset too, so it is divided back */
+@supports (zoom: 1) {
+  .node-label[data-selected='true'] .node-label-text {
+    zoom: var(--boost);
+    left: max(calc(40px / var(--boost)), calc((18px + var(--mark) / 2 + 3px / var(--z)) / var(--boost) + 6px));
+  }
+}
+/* A finished step keeps its dark done colour, but its brackets and plate do not dim with it. */
+.node-label[data-selected='true'][data-state='done'] .node-card { filter: none; }
+/* Forced colours (Windows high contrast) drop gradients and box shadows: the brackets keep their own drawing in the
+   system text colour, the plate takes the system background with a solid outline. */
+@media (forced-colors: active) {
+  .node-label[data-selected='true'] .node-mark { forced-color-adjust: none; --c: CanvasText; filter: none; }
+  .node-label[data-selected='true'] .node-label-text { background: Canvas; outline: 1px solid CanvasText; }
+}
+/* The selected step draws over its neighbours, so a near-dated neighbour's large circle does not hide its title; its
+   words take no pointer, so that circle still takes the click where they cross it. */
+.node-label[data-selected='true'] { z-index: 2147483000 !important; }
+/* A circle the plate still crosses (a crowd seen whole leaves it no clear place; titleFitDom.ts marks it) shows through a
+   hole cut in the plate's backing round it (--plate-holes, an ellipse 3px clear of each), so the plate never hides it, and
+   the plate's words, still drawn over it, read whole: the backing moves behind the words, where it can be cut. */
+.node-label[data-selected='true'][data-plate-holes='true'] .node-label-text { background: none; box-shadow: none; }
+.node-label[data-selected='true'][data-plate-holes='true'] .node-label-text::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: rgb(5 6 10 / 0.92);
+  box-shadow: inset 0 0 0 1px rgb(238 243 255 / 0.22);
+  mask-image: var(--plate-holes);
+  mask-composite: intersect;
+  pointer-events: none;
+}
+.node-label[data-selected='true'] .node-label-title,
+.node-label[data-selected='true'] .node-label-due { pointer-events: none; }
+.node-label-held { display: none; }
+/* Held: not expanded (well understood, or waiting on a fact) — muted, dashed, with a small tag. */
+.node-label[data-hold='true'] { color: #8b95a7; }
+.node-label[data-hold='true'] .node-dot { background: transparent; border: 2px dashed var(--state-color, #8b95a7); }
+.node-label[data-hold='true'] .node-label-held {
+  display: block;
+  position: absolute;
+  /* right over its circle (centred on it, clear of the chain outline), not out at the end of the slot */
+  left: 18px;
+  bottom: calc(50% + var(--dot-r) + 5px);
+  transform: translateX(-50%);
+  line-height: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #05060a;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8b95a7;
+}
+/* Needs drawn elsewhere (Group on: in another step's deck, or under another step; data-elsewhere is how many): "+N" on
+   a dashed tag just below and left of the circle, clear of the arrows that come up into the circle's bottom, so the
+   step never looks like one that needs nothing. It keeps a 10px size on screen however far out the view is (the card's
+   zoom is divided back), takes no pointer, and dims with its card. The tooltip and the name say it in words. */
+.node-label-elsewhere { display: none; }
+.node-label[data-elsewhere] .node-label-elsewhere {
+  display: block;
+  position: absolute;
+  z-index: 2;
+  right: calc(100% - 18px + 3px);
+  top: calc(50% + var(--dot-r) * 0.35);
+  box-sizing: border-box;
+  padding: 0 0.4em;
+  font-size: max(10px, calc(10px / var(--card-zoom, 1)));
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+  border: max(1px, calc(1.25px / var(--card-zoom, 1))) dashed #c3cad6;
+  border-radius: 0.7em;
+  background: #05060a;
+  color: #eef3ff;
+  text-shadow: none;
+}
+.node-label-id {
+  display: none;
+  position: absolute;
+  /* under the text block, aligned with the title, clear of the arrow that comes in under the dot */
+  left: 0;
+  top: 100%;
+  margin-top: 1px;
+  /* a small, faint note for finding the step's files (its path is in the panel footer): no box to cut the arrows */
+  font-family: ui-monospace, monospace;
+  font-size: 7.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.4;
+}
+.node-label:hover .node-label-id,
+.node-label[data-selected='true'] .node-label-id { display: block; }
+/* The selected step's id is a line of its plate (in flow, so the plate grows to hold it), not a faint note hanging
+   below it over bare edges. */
+.node-label[data-selected='true'] .node-label-id { position: static; margin-top: 1px; opacity: 0.6; }
+/* A deck's id ("deck:x") is not a step's: never shown. */
+.node-label[data-deck='true'] .node-label-id { display: none; }
+.node-label:focus-visible { outline: 2px solid rgb(90 200 250 / 0.7); outline-offset: 2px; }
+
+/* Titles that do not fit (titleFit.ts decides, data-title-fit marks): zoomed out, every step's title and due line draws
+   --title-boost times its card's size (set on the label layer: enough that an undated title is 9.5px), the same ratio for
+   all, so a date near still reads larger. A deck's words take the boost too, its text block keeping its card's width
+   (names cut sooner), and it lists as many names as fit the room its row keeps at that size. "short" cuts the title to one line, or two (data-title-lines), as
+   wide as --fit-w (the room before the next thing drawn) with an ellipsis, moved up or down by --fit-dy, and leaves out
+   the due line (the tooltip has it) and a deck's list; "dot" draws the circle alone. Hover or keyboard focus shows the
+   words whole on a dark backing, over the neighbours but under the selected step: the circle's hover shows them
+   (data-hovered, set by Graph while the pointer is on the circle; a cut title's own words keep the pointer and the
+   tooltip), they take no pointer, so the pointer reaches a neighbour's circle under them, and they go once it leaves
+   the circle. A title drawn in full is not raised: it already keeps clear of its neighbours. The selected step is
+   none of this: its plate is always drawn whole at its own size (above), and the rule keeps every other title off it. */
+.node-label-title { font-size: calc(13px * var(--title-boost, 1)); }
+.node-label-due { font-size: calc(10px * var(--title-boost, 1)); }
+.node-label:not([data-deck='true'], [data-selected='true']) .node-label-text { width: calc(150px * var(--title-boost, 1)); }
+.node-label[data-title-fit='short']:not([data-selected='true']) .node-label-text { width: var(--fit-w); transform: translateY(calc(-50% + var(--fit-dy, 0px))); }
+/* Cut, the priority mark stays before the words (it says as much as they do, and takes a fixed bit of the room, which
+   titleFit counts); the words are cut after it. Left out, the mark goes with them: the circle stands alone. */
+.node-label[data-title-fit='short']:not([data-selected='true']) .node-label-words { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-label[data-title-fit='short']:not([data-selected='true'])[data-title-lines='2'] .node-label-words {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+}
+.node-label[data-title-fit='short']:not([data-selected='true']) :is(.node-label-due, .node-deck-mix, .node-deck-list) { display: none; }
+.node-label[data-title-fit='dot']:not([data-selected='true']) .node-label-text { display: none; }
+.node-label:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible) { z-index: 2147482999 !important; }
+/* ...except while the pointer is on its circle (or the keyboard focus on it) and its shown words cross the selected step's plate or brackets
+   (data-over-plate, overPlate.ts): under the plate they would be mostly covered, so then they are drawn over it. */
+.node-label:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible)[data-over-plate='true'] { z-index: 2147483002 !important; }
+.node-label:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible) .node-label-text {
+  display: block;
+  width: calc(150px * var(--title-boost, 1));
+  transform: translateY(-50%);
+  padding: 2px 5px;
+  margin: 0 -5px;
+  border-radius: 4px;
+  background: rgb(5 6 10 / 0.9);
+  box-shadow: 0 0 0 1px rgb(160 190 255 / 0.18);
+}
+/* Drawn over the plate, its words sit on a solid backing whose edge reaches a little past them, so the plate's letters
+   beneath never show through its padding; they are drawn at full strength (no due-date haze, no done or off-path dimming)
+   so they read clearly against the plate they cover. */
+.node-label:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible)[data-over-plate='true'] .node-label-text {
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border-radius: 3px;
+  background: #05060a;
+  box-shadow: 0 0 0 3px #05060a, 0 0 0 4px rgb(160 190 255 / 0.3);
+}
+.node-label:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible)[data-over-plate='true'] .node-card { filter: none; }
+/* ...the words only: its circle, held tag and "+N" tag keep the done or off-path dimming the card gave them. */
+.node-label[data-state='done']:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible)[data-over-plate='true'] .node-card > :not(.node-label-text) { filter: brightness(0.7); }
+.node-label[data-state='done']:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible)[data-over-plate='true'] .node-card > .node-dot { filter: brightness(0.7) saturate(var(--haze, 1)); }
+.node-label[data-dim='true']:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible)[data-over-plate='true'] .node-card > :not(.node-label-text) { filter: brightness(0.35); }
+.node-label[data-dim='true']:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible)[data-over-plate='true'] .node-card > .node-dot { filter: brightness(0.35) saturate(var(--haze, 1)); }
+/* its id note joins the backing as a line under the words, as on the selected plate, rather than hanging cut below it */
+.node-label:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible)[data-over-plate='true'] .node-label-id { position: static; margin-top: 1px; opacity: 0.6; }
+/* Meanwhile the selected step's plate steps aside (data-plate-covered, overPlate.ts), so none of its letters show cut
+   round that backing; its brackets stay, and it is back as soon as the pointer leaves or the focus moves on. It keeps its
+   place, so nothing else moves. */
+.node-label[data-selected='true'][data-plate-covered='true'] .node-label-text { visibility: hidden; }
+.node-label:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible)[data-over-plate='true'] :is(.node-label-words, .node-label-due) { opacity: 1; filter: none; }
+.node-label:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible) .node-label-words { display: inline; white-space: normal; overflow: visible; -webkit-line-clamp: none; line-clamp: none; }
+.node-label:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible) .node-label-due:not(:empty) { display: block; }
+.node-label:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible) :is(.node-deck-mix, .node-deck-list) { display: block; }
+.node-label:is([data-title-fit='short'], [data-title-fit='dot']):not([data-selected='true']):is([data-hovered='true'], :focus-visible) :is(.node-label-title, .node-label-due, .node-deck-list li) { pointer-events: none; }
+
+@keyframes dg-blocked {
+  0%, 100% { background-color: #ff6b6b; }
+  50% { background-color: #7a2f35; }
+}
+.node-label[data-state='blocked']:not([data-hold='true']) .node-dot { animation: dg-blocked 2.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .node-label[data-state='blocked']:not([data-hold='true']) .node-dot { animation: none; }
+}
+
+[data-arming='true'] .node-label { cursor: crosshair; }
+
+.md { font-size: 13px; line-height: 1.55; color: rgb(255 255 255 / 0.85); overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md h1 { font-size: 16px; font-weight: 600; margin: 0 0 0.6em; }
+.md h2 { font-size: 13px; font-weight: 600; margin: 1.2em 0 0.4em; color: rgb(255 255 255 / 0.95); }
+.md h3, .md h4 { font-size: 13px; font-weight: 600; margin: 1em 0 0.3em; }
+.md p, .md ul, .md ol, .md blockquote, .md pre, .md table { margin: 0.5em 0; }
+.md ul { list-style: disc; padding-left: 1.2em; }
+.md ol { list-style: decimal; padding-left: 1.4em; }
+.md a { color: #5ac8fa; text-decoration: underline; text-underline-offset: 2px; }
+.md code { font-family: ui-monospace, monospace; font-size: 12px; background: rgb(255 255 255 / 0.08); border-radius: 4px; padding: 0 3px; }
+.md pre { background: rgb(0 0 0 / 0.35); border-radius: 6px; padding: 8px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; }
+.md blockquote { border-left: 2px solid rgb(255 255 255 / 0.2); padding-left: 10px; color: rgb(255 255 255 / 0.65); }
+.md table { border-collapse: collapse; font-size: 12px; }
+.md th, .md td { border: 1px solid rgb(255 255 255 / 0.12); padding: 3px 6px; text-align: left; }
+.md hr { border: 0; border-top: 1px solid rgb(255 255 255 / 0.12); margin: 1em 0; }
+
+.panel-section-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: rgb(255 255 255 / 0.4); }
+
+/* A deck's steps listed in place (DeckList): a small panel beside the deck, kept inside the free part of the window
+   and above the labels; its rows scroll, and the wheel over it scrolls them instead of zooming the graph. */
+.deck-list {
+  position: fixed;
+  z-index: 2147483600;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #c3cad6;
+  overflow: hidden;
+}
+.deck-list-head { display: flex; align-items: baseline; gap: 8px; padding: 8px 8px 6px 12px; border-bottom: 1px solid rgb(160 190 255 / 0.1); }
+.deck-list-title { font-weight: 600; color: #e6eaf2; white-space: nowrap; }
+.deck-list-mix { flex: 1; min-width: 0; font-size: 11px; color: #8b95a7; }
+.deck-list-mix [data-state='done'], .deck-list-rows [data-state='done'] .deck-list-state { color: #7d8699; }
+.deck-list-close { flex: none; width: 22px; height: 22px; border-radius: 6px; color: #8b95a7; line-height: 1; }
+.deck-list-close:hover { color: #fff; background: rgb(255 255 255 / 0.08); }
+.deck-list-hint { margin: 0; padding: 6px 12px 0; font-size: 11px; color: #ffb454; }
+.deck-list-rows { flex: 1 1 auto; min-height: 0; margin: 0; padding: 4px; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
+.deck-list-rows button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 6px;
+  text-align: left;
+  color: inherit;
+}
+.deck-list-rows button:hover, .deck-list-rows button:focus-visible { background: rgb(90 200 250 / 0.12); color: #fff; }
+/* Its colour is the legend's (STATE_SWATCH), set on the element. */
+.deck-list-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; }
+.deck-list-rows [data-state='done'] .deck-list-name { color: #7d8699; }
+/* The priority mark's column: as wide as the mark, empty for normal; a done step's mark dims as on the graph. */
+.deck-list-prio { flex: none; display: flex; align-items: center; width: var(--mark-w); margin-right: -2px; }
+.deck-list-rows [data-state='done'] .priority-mark { filter: brightness(0.7); }
+/* A long title takes a second line before it is cut short (the row's title and name carry it whole). */
+.deck-list-name { flex: 1; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 1.3; }
+.deck-list-meta { flex: none; display: flex; align-items: baseline; gap: 6px; font-size: 10px; color: #8b95a7; }
+.deck-list-due-inherited { font-style: italic; }
+.deck-list-due-overdue { color: #ff6b6b; }
+.deck-list-state { min-width: 44px; text-align: right; }
+.deck-list-open { margin: 0 4px 4px; padding: 5px 8px; border-top: 1px solid rgb(160 190 255 / 0.1); border-radius: 0 0 6px 6px; font-size: 11px; color: #8b95a7; text-align: left; }
+.deck-list-open:hover, .deck-list-open:focus-visible { color: #5ac8fa; }
+.deck-list-open::after { content: ' \25B8'; }
