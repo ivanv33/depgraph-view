@@ -1,5 +1,5 @@
 import { watch } from 'chokidar'
-import { realpathSync } from 'node:fs'
+import { realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { GraphError, loadGraphFile, type LoadResult } from './loader.js'
 
@@ -56,9 +56,15 @@ export interface WatchedSource extends GraphSource {
   ready(): Promise<void>
 }
 
-/** The plan file, every node's md file and every node folder (chokidar watches a folder recursively). */
+/**
+ * The plan file, every node's md file, every node folder (chokidar watches a folder recursively) and the
+ * `nodes/` folder beside the plan when there is one, so a default md that appears later is read.
+ */
 function watchList(planPath: string, result: LoadResult): Set<string> {
-  return new Set([planPath, ...Object.values(result.mdFiles), ...Object.values(result.folders)])
+  const list = new Set([planPath, ...Object.values(result.mdFiles), ...Object.values(result.folders)])
+  const nodesDir = path.join(path.dirname(planPath), 'nodes')
+  if (statSync(nodesDir, { throwIfNoEntry: false })?.isDirectory()) list.add(nodesDir)
+  return list
 }
 
 /**

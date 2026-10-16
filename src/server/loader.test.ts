@@ -122,6 +122,16 @@ describe('loadGraph', () => {
     expect(r.mdFiles).not.toHaveProperty('a')
     expect(r.warnings).toEqual(['node "a": no md file'])
   })
+  it('lists the default folder and sets folders[id] when the default md is missing but the folder exists', () => {
+    const r = loadGraph(makeFolder({ 'nodes/a.context/seed.txt': 'x' }), planText('G', { a: {} }))
+    expect(r.resources.a).toEqual(['seed.txt'])
+    expect(r.folders.a).toBeDefined()
+    expect(r.warnings).toEqual(['node "a": no md file'])
+  })
+  it('warns twice for a node that names a missing dir and has no default md', () => {
+    const r = loadGraph(makeFolder({ 'x.txt': '' }), planText('G', { a: { dir: 'notes/a' } }))
+    expect(r.warnings).toEqual(['node "a": no md file', 'node "a": dir not found'])
+  })
   it('still drops a node whose explicit md is missing', () => {
     const r = loadGraph(makeFolder({ 'x.txt': '' }), planText('G', { a: { md: 'notes/a.md' } }))
     expect(r.plan.nodes).toEqual([])

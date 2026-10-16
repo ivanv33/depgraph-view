@@ -221,6 +221,21 @@ describe('watchedSource', () => {
       await linked.close()
     }
   })
+  it('a default md written after start reloads with its title', async () => {
+    const fresh = makeFolder({ 'graph.yaml': planText('G', { a: {}, b: {} }), 'nodes/b.context/b.md': '' })
+    const live = watchedSource(join(fresh, 'graph.yaml'))
+    try {
+      await settle(live)
+      expect(live.current().result.plan.nodes.find(n => n.id === 'a')?.title).toBe('a')
+      const next = nextEvent(live)
+      mkdirSync(join(fresh, 'nodes/a.context'))
+      writeFileSync(join(fresh, 'nodes/a.context/a.md'), '---\ntitle: Sow the peas\n---\n')
+      expect(await next).toEqual({ type: 'reload', generatedAt: expect.any(String) })
+      expect(live.current().result.plan.nodes.find(n => n.id === 'a')?.title).toBe('Sow the peas')
+    } finally {
+      await live.close()
+    }
+  })
   it('sends nothing after close', async () => {
     await s.close()
     const events: LiveEvent[] = []
