@@ -78,11 +78,13 @@ export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, a
   const lost = useRef(onFocusLost)
   const deckEl = useRef(anchor)
   const aroundRef = useRef(around)
+  const legendRef = useRef(legend)
   useEffect(() => {
     close.current = onClose
     lost.current = onFocusLost
     deckEl.current = anchor
     aroundRef.current = around
+    legendRef.current = legend
   })
 
   // Follow the deck (the view pans and zooms under it), kept inside the free area. Measuring is skipped on a frame where
@@ -116,7 +118,7 @@ export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, a
         watchedDeck = deck
         dirty = true
       }
-      const key = `${deck.style.transform}|${deck.parentElement?.style.getPropertyValue('--label-scale')}|${deck.style.getPropertyValue('--near-scale')}|${window.innerWidth}x${window.innerHeight}|${JSON.stringify(aroundRef.current)}`
+      const key = `${deck.style.transform}|${deck.parentElement?.style.getPropertyValue('--label-scale')}|${deck.style.getPropertyValue('--near-scale')}|${window.innerWidth}x${window.innerHeight}|${JSON.stringify(aroundRef.current)}|${legendRef.current}`
       if (!dirty && key === last) return undefined
       const dot = rect(deck.querySelector('.node-dot'))
       const text = rect(deck.querySelector('.node-label-text'))
@@ -128,7 +130,7 @@ export default function DeckList({ deckId, title, mix, rows, anchor, frameRef, a
       // As tall as all its rows: the rows' own height in place of the part of it shown now.
       const rowsEl = list.current
       const want = { w: LIST_SIZE.w, h: el.offsetHeight + (rowsEl ? rowsEl.scrollHeight - rowsEl.clientHeight : 0) }
-      const p = placeDeckList({ dot, text }, want, free, legend ? legendBox(view) : [])
+      const p = placeDeckList({ dot, text }, want, free, legendRef.current ? legendBox(view) : [])
       return () => {
         el.style.left = `${p.left}px`
         el.style.top = `${p.top}px`

@@ -166,6 +166,44 @@ describe('DeckList place', () => {
     }
   })
 
+  it('places the list again when the host toggles the legend while it is open', () => {
+    const deck = deckAt({ v: 10 })
+    const size = { w: window.innerWidth, h: window.innerHeight }
+    const setView = (w: number, h: number) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: w })
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: h })
+    }
+    const frameRef: { current: (() => (() => void) | undefined) | null } = { current: null }
+    const list = (legend: boolean) => (
+      <DeckList
+        deckId="deck:x"
+        title="1 step"
+        mix={[]}
+        rows={[row('a')]}
+        anchor={() => deck}
+        frameRef={frameRef as never}
+        around={{}}
+        legend={legend}
+        onPick={vi.fn()}
+        onClose={vi.fn()}
+        onFocusLost={vi.fn()}
+      />
+    )
+    try {
+      setView(1000, 600)
+      const { rerender } = render(list(true))
+      const shown = screen.getByTestId('deck-list').style.maxHeight
+      rerender(list(false))
+      frameRef.current?.()?.()
+      // the Legend's room is the graph's now: the list reaches the window's bottom margin
+      expect(screen.getByTestId('deck-list').style.maxHeight).toBe('440px')
+      expect(shown).not.toBe('440px')
+    } finally {
+      setView(size.w, size.h)
+      deck.remove()
+    }
+  })
+
   it('reaches the bottom-left corner when the host hides the legend, and ends above the host bottom card', () => {
     const deck = deckAt({ v: 10 })
     const size = { w: window.innerWidth, h: window.innerHeight }
