@@ -84,8 +84,11 @@ export function parseGraphYaml(text: string): ParsedGraph {
     const raw = nodeData[id] as Record<string, unknown>
     for (const p of value.items) {
       const k = keyOf(doc, p.key)
-      if (k === 'needs') entry.needs = needsOf(doc, resolved(doc, p.value), fail)
-      else if (k === 'md' || k === 'dir') {
+      if (k === 'needs') {
+        const v = resolved(doc, p.value)
+        // `needs:` with nothing after it (YAML null) is no needs, as an empty node is.
+        entry.needs = v === null || v === undefined || (isScalar(v) && v.value === null) ? [] : needsOf(doc, v, fail)
+      } else if (k === 'md' || k === 'dir') {
         if (typeof raw[k] !== 'string') fail(`${k} must be a string`)
         entry[k] = raw[k] as string
       } else if (k !== null && COMMON.has(k)) entry.common[k] = raw[k]

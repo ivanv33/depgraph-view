@@ -1,9 +1,9 @@
 import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { ID_RE, validatePlan, type Plan, type PlanNode } from '../engine/schema.js'
-import { COMMON_KEYS, NodeFileError, nodeFromFile, parseFrontmatter, splitNodeFile } from './frontmatter.js'
+import { validatePlan, type Plan, type PlanNode } from '../engine/schema.js'
+import { NodeFileError, nodeFromFile, parseFrontmatter, splitNodeFile } from './frontmatter.js'
 import { listFiles, within } from './paths.js'
-import { GraphError } from './planYaml.js'
+import { GraphError, parseGraphYaml } from './planYaml.js'
 
 export { GraphError } from './planYaml.js'
 
@@ -21,33 +21,6 @@ export interface LoadResult {
 }
 
 const FILE_LIMIT = 500
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every(x => typeof x === 'string')
-
-interface Entry { id: string; md: string; dir: string | undefined; dependsOn: string[]; common: Record<string, unknown> }
-
-/** The JSON's entries after the file-level shape checks; throws GraphError at the first problem. */
-function entriesOf(json: unknown): { name: string; entries: Entry[] } {
-  if (!isRecord(json)) throw new GraphError('graph must be an object')
-  if (typeof json.name !== 'string') throw new GraphError('name must be a string')
-  if (!Array.isArray(json.nodes)) throw new GraphError('nodes must be an array')
-  const seen = new Set<string>()
-  const entries = json.nodes.map((raw, i): Entry => {
-    if (!isRecord(raw)) throw new GraphError(`node ${i}: must be an object`)
-    const id = raw.id
-    if (typeof id !== 'string' || !ID_RE.test(id)) throw new GraphError(`node ${i}: id "${String(id)}" does not match ${ID_RE.source}`)
-    if (seen.has(id)) throw new GraphError(`node ${i}: duplicate id "${id}"`)
-    seen.add(id)
-    if (typeof raw.md !== 'string') throw new GraphError(`node "${id}": md must be a string`)
-    if (raw.dir !== undefined && typeof raw.dir !== 'string') throw new GraphError(`node "${id}": dir must be a string`)
-    if (raw.depends_on !== undefined && !isStringArray(raw.depends_on))
-      throw new GraphError(`node "${id}": depends_on must be an array of strings`)
-    const common = Object.fromEntries(COMMON_KEYS.filter(k => Object.hasOwn(raw, k)).map(k => [k, raw[k]]))
-    return { id, md: raw.md, dir: raw.dir as string | undefined, dependsOn: (raw.depends_on as string[] | undefined) ?? [], common }
-  })
-  return { name: json.name, entries }
-}
 
 /**
  * Where `rel` points: its realpath, or `outside` when it leaves the root lexically or its realpath
@@ -67,9 +40,14 @@ function locate(root: string, realRoot: string, rel: string, kind: 'file' | 'dir
   return (kind === 'file' ? stat.isFile() : stat.isDirectory()) ? real : 'missing'
 }
 
-/** The graph in `json`, its md files and folders read relative to `rootDir`. Throws GraphError. */
-export function loadGraph(rootDir: string, json: unknown): LoadResult {
-  const { name, entries } = entriesOf(json)
+/**
+ * The plan in `yaml`, its md files and folders read relative to `rootDir`; nodes sorted by id. A node
+ * without `md` reads `nodes/<id>.context/<id>.md` and lists `nodes/<id>.context` unless it names `dir`;
+ * with `md` and no `dir`, its folder is the md file's. Throws GraphError.
+ */
+export function loadGraph(rootDir: string, yaml: string): LoadResult {
+  const parsed = parseGraphYaml(yaml)
+  const entries = [...parsed.entries].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   const root = path.resolve(rootDir)
   let realRoot: string
   try {
@@ -77,37 +55,43 @@ export function loadGraph(rootDir: string, json: unknown): LoadResult {
   } catch {
     throw new GraphError(`folder not found: ${path.basename(rootDir)}`)
   }
-  const out: LoadResult = { plan: { name, nodes: [] }, resources: {}, bodies: {}, folders: {}, mdFiles: {}, warnings: [] }
+  const out: LoadResult = { plan: { name: parsed.name, nodes: [] }, resources: {}, bodies: {}, folders: {}, mdFiles: {}, warnings: [...parsed.warnings] }
   const warn = (id: string, text: string) => out.warnings.push(`node "${id}": ${text}`)
   const kept: PlanNode[] = []
   // Nodes that share a folder share its one walk.
   const listed = new Map<string, ReturnType<typeof listFiles>>()
-  for (const { id, md, dir, dependsOn, common } of entries) {
+  for (const { id, needs, md: givenMd, dir: givenDir, common } of entries) {
+    const md = givenMd ?? `nodes/${id}.context/${id}.md`
+    const dir = givenDir ?? (givenMd === undefined ? `nodes/${id}.context` : undefined)
     const mdPath = locate(root, realRoot, md, 'file')
     if (mdPath === 'outside') { warn(id, 'md is outside the folder'); continue }
-    if (mdPath === 'missing') { warn(id, 'md not found'); continue }
-    let folder: string | null = path.dirname(mdPath)
+    if (mdPath === 'missing' && givenMd !== undefined) { warn(id, 'md not found'); continue }
+    let folder: string | null = mdPath === 'missing' ? null : path.dirname(mdPath)
     if (dir !== undefined) {
       const dirPath = locate(root, realRoot, dir, 'dir')
       if (dirPath === 'outside') { warn(id, 'dir is outside the folder'); continue }
       folder = dirPath === 'missing' ? null : dirPath
     }
-    let data: Record<string, unknown>
-    let body: string
-    try {
-      const split = splitNodeFile(readFileSync(mdPath, 'utf8'))
-      data = parseFrontmatter(split.frontmatter)
-      body = split.body
-    } catch (e) {
-      if (e instanceof NodeFileError) throw new GraphError(`node "${id}": ${e.message}`)
-      throw e
+    let data: Record<string, unknown> = {}
+    let body = ''
+    if (mdPath === 'missing') warn(id, 'no md file')
+    else {
+      try {
+        const split = splitNodeFile(readFileSync(mdPath, 'utf8'))
+        data = parseFrontmatter(split.frontmatter)
+        body = split.body
+      } catch (e) {
+        if (e instanceof NodeFileError) throw new GraphError(`node "${id}": ${e.message}`)
+        throw e
+      }
+      out.mdFiles[id] = mdPath
     }
-    kept.push(nodeFromFile(id, { ...common, ...data }, dependsOn))
+    kept.push(nodeFromFile(id, { ...common, ...data }, needs))
     out.bodies[id] = body
-    out.mdFiles[id] = mdPath
     if (folder === null) {
       out.resources[id] = []
-      warn(id, 'dir not found')
+      // A missing default md already said so; its missing default folder needs no second line.
+      if (givenDir !== undefined || givenMd !== undefined) warn(id, 'dir not found')
     } else {
       let walk = listed.get(folder)
       if (walk === undefined) listed.set(folder, (walk = listFiles(folder, FILE_LIMIT)))
@@ -128,7 +112,17 @@ export function loadGraph(rootDir: string, json: unknown): LoadResult {
   return out
 }
 
-/** The absolute path of the graph JSON: `p` itself when it is a file, else the one `.json` file at the top of folder `p`. */
+/** The refusal for an old JSON graph file named `name`. */
+function jsonRefusal(name: string): GraphError {
+  const stem = name.slice(0, -'.json'.length)
+  return new GraphError(`${stem}.json: JSON graph files are no longer read; rewrite it as ${stem}.yaml (see README "From graph.json")`)
+}
+
+/**
+ * The absolute path of the plan YAML: `p` itself when it is a `.yaml`/`.yml` file; for a folder,
+ * `<folder>/<basename>.yaml` when present, else its one top-level `.yaml` file. A `.json` file, or a
+ * folder with JSON but no YAML, is refused with a pointer to the README. Throws GraphError.
+ */
 export function resolveGraphPath(p: string): string {
   const abs = path.resolve(p)
   let isDir: boolean
@@ -137,27 +131,39 @@ export function resolveGraphPath(p: string): string {
   } catch {
     throw new GraphError(`not found: ${p}`)
   }
-  if (!isDir) return abs
-  const isFile = (name: string) => statSync(path.join(abs, name), { throwIfNoEntry: false })?.isFile() === true
-  const found = readdirSync(abs).filter(name => name.endsWith('.json') && isFile(name))
-  if (found.length !== 1) {
-    const names = found.length ? `: ${found.sort().join(', ')}` : ''
-    throw new GraphError(`${p}: expected exactly one .json file at the top of the folder, found ${found.length}${names}`)
+  if (!isDir) {
+    const base = path.basename(abs)
+    if (base.endsWith('.yaml') || base.endsWith('.yml')) return abs
+    if (base.endsWith('.json')) throw jsonRefusal(base)
+    throw new GraphError(`${base}: not a plan file (expected .yaml or .yml)`)
   }
-  return path.join(abs, found[0])
+  const isFile = (name: string) => statSync(path.join(abs, name), { throwIfNoEntry: false })?.isFile() === true
+  const names = readdirSync(abs).filter(isFile).sort()
+  const own = `${path.basename(abs)}.yaml`
+  if (names.includes(own)) return path.join(abs, own)
+  const found = names.filter(name => name.endsWith('.yaml'))
+  if (found.length === 1) return path.join(abs, found[0])
+  if (found.length > 1) throw new GraphError(`${p}: expected exactly one .yaml file at the top of the folder, found ${found.length}: ${found.join(', ')}`)
+  const json = names.find(name => name === `${path.basename(abs)}.json`) ?? names.find(name => name.endsWith('.json'))
+  if (json !== undefined) throw jsonRefusal(json)
+  throw new GraphError(`${p}: expected a .yaml plan file at the top of the folder, found none`)
 }
 
-/** Reads the graph JSON at `jsonPath` and loads it relative to its folder. Throws GraphError. */
-export function loadGraphFile(jsonPath: string): LoadResult {
-  const base = path.basename(jsonPath)
-  let json: unknown
+/** Reads the plan YAML at `planPath` and loads it relative to its folder. Throws GraphError. */
+export function loadGraphFile(planPath: string): LoadResult {
+  const base = path.basename(planPath)
+  let text: string
   try {
-    const text = readFileSync(jsonPath, 'utf8')
-    json = JSON.parse(text.startsWith('﻿') ? text.slice(1) : text)
+    text = readFileSync(planPath, 'utf8')
   } catch (e) {
-    // Only a parse error's own text: I/O messages carry absolute paths, and these reach the page.
-    if (e instanceof SyntaxError) throw new GraphError(`${base}: ${e.message}`)
+    // Only the error code: I/O messages carry absolute paths, and these reach the page.
     throw new GraphError(`${base}: cannot be read (${(e as NodeJS.ErrnoException).code ?? 'error'})`)
   }
-  return loadGraph(path.dirname(jsonPath), json)
+  try {
+    return loadGraph(path.dirname(planPath), text.startsWith('﻿') ? text.slice(1) : text)
+  } catch (e) {
+    // Only an error in the YAML text itself names the file; shape and node errors carry their own context.
+    if (e instanceof GraphError && e.yaml) throw new GraphError(`${base}: ${e.message}`, true)
+    throw e
+  }
 }

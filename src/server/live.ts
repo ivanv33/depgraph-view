@@ -17,9 +17,9 @@ export interface GraphSource {
   close(): Promise<void>
 }
 
-/** The graph at `jsonPath`, loaded once; never emits. Throws GraphError on a bad file. */
-export function staticSource(jsonPath: string): GraphSource {
-  const snapshot: Snapshot = { result: loadGraphFile(jsonPath), generatedAt: new Date().toISOString() }
+/** The graph at `planPath`, loaded once; never emits. Throws GraphError on a bad file. */
+export function staticSource(planPath: string): GraphSource {
+  const snapshot: Snapshot = { result: loadGraphFile(planPath), generatedAt: new Date().toISOString() }
   return {
     current: () => snapshot,
     on: () => () => {},
@@ -56,20 +56,20 @@ export interface WatchedSource extends GraphSource {
   ready(): Promise<void>
 }
 
-/** The JSON file, every node's md file and every node folder (chokidar watches a folder recursively). */
-function watchList(jsonPath: string, result: LoadResult): Set<string> {
-  return new Set([jsonPath, ...Object.values(result.mdFiles), ...Object.values(result.folders)])
+/** The plan file, every node's md file and every node folder (chokidar watches a folder recursively). */
+function watchList(planPath: string, result: LoadResult): Set<string> {
+  return new Set([planPath, ...Object.values(result.mdFiles), ...Object.values(result.folders)])
 }
 
 /**
- * The graph at `jsonPath`, loaded once (throws GraphError on a bad file) and reloaded `debounceMs` after
+ * The graph at `planPath`, loaded once (throws GraphError on a bad file) and reloaded `debounceMs` after
  * the last change to its files. A good reload replaces the snapshot and sends `reload`; a bad one keeps
  * the snapshot and sends `error`. The reload is synchronous, so a change that lands while it runs is
  * queued behind it and restarts the timer: exactly one more reload, never a pile-up.
  */
-export function watchedSource(jsonPath: string, debounceMs = 150): WatchedSource {
-  let snapshot: Snapshot = { result: loadGraphFile(jsonPath), generatedAt: new Date().toISOString() }
-  let watched = watchList(jsonPath, snapshot.result)
+export function watchedSource(planPath: string, debounceMs = 150): WatchedSource {
+  let snapshot: Snapshot = { result: loadGraphFile(planPath), generatedAt: new Date().toISOString() }
+  let watched = watchList(planPath, snapshot.result)
   const listeners = new Set<(e: LiveEvent) => void>()
   let lastError: string | null = null
   const emit = (e: LiveEvent) => {
@@ -79,7 +79,7 @@ export function watchedSource(jsonPath: string, debounceMs = 150): WatchedSource
   let timer: NodeJS.Timeout | undefined
   let closed = false
 
-  const rootDir = path.dirname(path.resolve(jsonPath))
+  const rootDir = path.dirname(path.resolve(planPath))
   const roots = [rootDir, realpathSync(rootDir)]
   const watcher = watch([...watched], { ignoreInitial: true, followSymlinks: false, ignored: (p: string) => skipped(roots, p) })
   let live = false
@@ -90,13 +90,13 @@ export function watchedSource(jsonPath: string, debounceMs = 150): WatchedSource
     if (closed) return
     let result: LoadResult
     try {
-      result = loadGraphFile(jsonPath)
+      result = loadGraphFile(planPath)
     } catch (e) {
       if (announce) emit({ type: 'error', message: pageMessage(e, 'reload the graph') })
       return
     }
     snapshot = { result, generatedAt: new Date().toISOString() }
-    const next = watchList(jsonPath, result)
+    const next = watchList(planPath, result)
     // Unwatching a path under a folder that is still watched would make chokidar ignore that subtree;
     // unwatching a folder that holds a still-watched path drops that path too.
     const gone = [...watched].filter(p => !next.has(p) && ![...next].some(k => inside(k, p) || inside(p, k)))

@@ -8,7 +8,7 @@ export interface CliArgs {
 
 export const USAGE = `usage: depgraph-view <path> [--port N] [--host ADDR] [--open] [--no-watch]
 
-  <path>       a graph JSON file, or a folder holding exactly one top-level JSON file
+  <path>       a plan YAML file, or a folder holding it
   --port N     serve on port N (0-65535); without it the first free port from 4310
   --host ADDR  bind ADDR (default 127.0.0.1); 0.0.0.0 serves the whole network
   --open       open the page in the default browser

@@ -4,7 +4,7 @@ import { createServer as createNetServer } from 'node:net'
 import type { AddressInfo } from 'node:net'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { makeFolder, removeFolders } from './__tests__/folder.js'
+import { makeFolder, planText, removeFolders } from './__tests__/folder.js'
 import { contentType, createHandler } from './http.js'
 import type { GraphSource, LiveEvent } from './live.js'
 import { PortInUseError } from './port.js'
@@ -53,7 +53,7 @@ beforeEach(async () => {
   const outside = makeFolder({ 'secret.txt': 'not for the page' })
   distDir = makeFolder({ 'index.html': '<!doctype html><title>viewer</title>', 'assets/app-abc123.js': 'console.log(1)', 'viewer.css': 'body{}' })
   root = makeFolder({
-    'graph.json': JSON.stringify({ name: 'Garden', nodes: [{ id: 'a', md: 'a.md', dir: 'ctx/a' }] }),
+    'graph.yaml': planText('Garden', { a: { md: 'a.md', dir: 'ctx/a' } }),
     'a.md': '---\ntitle: Sow the beans\n---\nBody\n',
     'ctx/a/notes.txt': 'row by row',
     'ctx/a/page.html': '<script>alert(1)</script>',
@@ -84,9 +84,9 @@ describe('startServer', () => {
   })
   it('serves a node file and 404s traversal and symlinks out', async () => {
     expect((await fetch(`${server.url}files/a/notes.txt`)).status).toBe(200)
-    for (const p of ['files/a/../graph.json', 'files/a/%2e%2e/graph.json', 'files/a/../../graph.json', 'files/a/%2e%2e/%2e%2e/graph.json'])
+    for (const p of ['files/a/../graph.yaml', 'files/a/%2e%2e/graph.yaml', 'files/a/../../graph.yaml', 'files/a/%2e%2e/%2e%2e/graph.yaml'])
       expect(await rawStatus(server.url, `/${p}`), p).toBe(404)
-    for (const p of ['files/a/..%2fgraph.json', 'files/a/..%2f..%2fgraph.json', 'files/a/link-out/secret.txt', 'files/ghost/x.txt', 'files/a/'])
+    for (const p of ['files/a/..%2fgraph.yaml', 'files/a/..%2f..%2fgraph.yaml', 'files/a/link-out/secret.txt', 'files/ghost/x.txt', 'files/a/'])
       expect((await fetch(`${server.url}${p}`)).status, p).toBe(404)
   })
   it('serves encoded names and 404s encoded traversal', async () => {
@@ -265,9 +265,9 @@ describe('createHandler', () => {
     const decoder = new TextDecoder()
     let text = decoder.decode((await reader.read()).value)
     expect(listeners.size).toBe(1)
-    for (const l of listeners) l({ type: 'error', message: 'graph.json: "bad" input' })
+    for (const l of listeners) l({ type: 'error', message: 'graph.yaml: "bad" input' })
     while (!text.endsWith('\n\n') || text === 'retry: 1000\n\n') text += decoder.decode((await reader.read()).value)
-    expect(text).toBe('retry: 1000\n\nevent: error\ndata: {"message":"graph.json: \\"bad\\" input"}\n\n')
+    expect(text).toBe('retry: 1000\n\nevent: error\ndata: {"message":"graph.yaml: \\"bad\\" input"}\n\n')
     await reader.cancel()
     await expect.poll(() => listeners.size).toBe(0)
   })
@@ -283,7 +283,7 @@ describe('createHandler late joiner', () => {
     const source: GraphSource = {
       current: () => { throw new Error('unused') },
       on: () => () => {},
-      error: () => 'graph.json: bad',
+      error: () => 'graph.yaml: bad',
       close: async () => {},
     }
     bare = createServer(createHandler(source, makeFolder({})))
@@ -292,7 +292,7 @@ describe('createHandler late joiner', () => {
     const decoder = new TextDecoder()
     let text = ''
     while (!text.includes('event: error')) text += decoder.decode((await reader.read()).value)
-    expect(text).toBe('retry: 1000\n\nevent: error\ndata: {"message":"graph.json: bad"}\n\n')
+    expect(text).toBe('retry: 1000\n\nevent: error\ndata: {"message":"graph.yaml: bad"}\n\n')
     await reader.cancel()
   })
 })

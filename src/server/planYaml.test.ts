@@ -15,6 +15,7 @@ describe('parseGraphYaml', () => {
   it('an empty node value and needs: [] both mean no needs', () => {
     expect(parseGraphYaml('name: G\nnodes:\n  a:\n  b: {needs: []}\n').entries.map(e => e.needs)).toEqual([[], []])
   })
+  it('needs: with no value means no needs', () => expect(parseGraphYaml('name: G\nnodes:\n  a: {needs: }\n').entries[0].needs).toEqual([]))
   it('nodes: {} is an empty plan', () => expect(parseGraphYaml('name: G\nnodes: {}\n').entries).toEqual([]))
   it('a quoted numeric id is a string', () => expect(parseGraphYaml('name: G\nnodes:\n  "2026": {}\n').entries[0].id).toBe('2026'))
   it('an unquoted id YAML reads as a non-string rejects with a hint to quote it', () => {

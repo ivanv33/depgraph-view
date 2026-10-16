@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { makeFolder, removeFolders } from './__tests__/folder.js'
+import { makeFolder, planText, removeFolders } from './__tests__/folder.js'
 import { GraphError } from './loader.js'
 import { watchedSource, type LiveEvent, type WatchedSource } from './live.js'
 
@@ -41,20 +41,20 @@ async function settle(source: WatchedSource): Promise<void> {
   await pause(300)
 }
 
-const graph = (nodes: object[]) => JSON.stringify({ name: 'Orchard', nodes })
+const graph = (nodes: Record<string, Record<string, unknown> | null>) => planText('Orchard', nodes)
 
 let root: string
-let jsonPath: string
+let planPath: string
 let s: WatchedSource
 
 beforeEach(async () => {
   root = makeFolder({
-    'graph.json': graph([{ id: 'a', md: 'a.md', dir: 'ctx/a' }]),
+    'graph.yaml': graph({ a: { md: 'a.md', dir: 'ctx/a' } }),
     'a.md': '---\ntitle: Prune the pears\n---\n',
     'ctx/a/notes.txt': 'north row first',
   })
-  jsonPath = join(root, 'graph.json')
-  s = watchedSource(jsonPath)
+  planPath = join(root, 'graph.yaml')
+  s = watchedSource(planPath)
   await settle(s)
 })
 afterEach(async () => {
@@ -65,11 +65,11 @@ afterEach(async () => {
 describe('watchedSource', () => {
   it('loads once and throws GraphError on a bad file', () => {
     expect(s.current().result.plan.nodes[0].title).toBe('Prune the pears')
-    const bad = makeFolder({ 'graph.json': '{ nope' })
-    expect(() => watchedSource(join(bad, 'graph.json'))).toThrow(GraphError)
+    const bad = makeFolder({ 'graph.yaml': 'name: [unclosed\n' })
+    expect(() => watchedSource(join(bad, 'graph.yaml'))).toThrow(GraphError)
   })
   it('picks up an edit made before the watcher is ready, without an event', async () => {
-    const early = watchedSource(jsonPath)
+    const early = watchedSource(planPath)
     try {
       const events: LiveEvent[] = []
       early.on(e => events.push(e))
@@ -85,7 +85,7 @@ describe('watchedSource', () => {
     const locked = join(root, 'ctx/a/locked') // the loader skips an unreadable folder, chokidar does not
     mkdirSync(locked)
     chmodSync(locked, 0o000)
-    const failing = watchedSource(jsonPath)
+    const failing = watchedSource(planPath)
     try {
       await expect(failing.ready()).rejects.toMatchObject({ code: 'EACCES' })
     } finally {
@@ -100,20 +100,20 @@ describe('watchedSource', () => {
     expect(s.current().result.plan.nodes[0].title).toBe('T4')
   })
   it('keeps the last good graph and sends error on an invalid reload', async () => {
-    writeFileSync(jsonPath, '{ nope')
+    writeFileSync(planPath, 'name: [unclosed\n')
     const e = await nextEvent(s)
-    expect(e).toEqual({ type: 'error', message: expect.stringContaining('graph.json') })
+    expect(e).toEqual({ type: 'error', message: expect.stringContaining('graph.yaml') })
     expect(s.current().result.plan.nodes).toHaveLength(1)
   })
   it('sends a missing graph file by name, without its absolute path', async () => {
-    rmSync(jsonPath)
+    rmSync(planPath)
     const e = await nextEvent(s)
-    expect(e).toEqual({ type: 'error', message: expect.stringContaining('graph.json') })
+    expect(e).toEqual({ type: 'error', message: expect.stringContaining('graph.yaml') })
     expect((e as { message: string }).message).not.toMatch(/(^|[\s'"(])\//)
   })
   it('sends an I/O failure without its absolute path', async () => {
     chmodSync(join(root, 'a.md'), 0o000)
-    writeFileSync(jsonPath, graph([{ id: 'a', md: 'a.md', dir: 'ctx/a' }]))
+    writeFileSync(planPath, graph({ a: { md: 'a.md', dir: 'ctx/a' } }))
     const e = await nextEvent(s)
     chmodSync(join(root, 'a.md'), 0o644)
     expect(e).toEqual({ type: 'error', message: 'could not reload the graph (EACCES)' })
@@ -126,7 +126,7 @@ describe('watchedSource', () => {
   })
   it('watches an md file added to the index by a reload', async () => {
     writeFileSync(join(root, 'b.md'), '---\ntitle: Graft the apples\n---\n')
-    writeFileSync(jsonPath, graph([{ id: 'a', md: 'a.md', dir: 'ctx/a' }, { id: 'b', md: 'b.md', dir: 'ctx/a' }]))
+    writeFileSync(planPath, graph({ a: { md: 'a.md', dir: 'ctx/a' }, b: { md: 'b.md', dir: 'ctx/a' } }))
     expect((await nextEvent(s)).type).toBe('reload')
     expect(s.current().result.plan.nodes.map(n => n.id)).toEqual(['a', 'b'])
     await pause(300) // chokidar starts the new watch asynchronously after `add`
@@ -136,7 +136,7 @@ describe('watchedSource', () => {
   })
   it('stops watching an md file dropped from the index by a reload', async () => {
     writeFileSync(join(root, 'b.md'), '---\ntitle: Graft the apples\n---\n')
-    writeFileSync(jsonPath, graph([{ id: 'b', md: 'b.md', dir: 'ctx/a' }]))
+    writeFileSync(planPath, graph({ b: { md: 'b.md', dir: 'ctx/a' } }))
     expect((await nextEvent(s)).type).toBe('reload')
     writeFileSync(join(root, 'a.md'), '---\ntitle: Not watched now\n---\n')
     expect(await collect(s, 600)).toEqual([])
@@ -144,10 +144,10 @@ describe('watchedSource', () => {
   it('keeps watching a folder under a still-watched folder after its node is dropped', async () => {
     mkdirSync(join(root, 'ctx/a/sub'))
     writeFileSync(join(root, 'p.md'), '---\ntitle: Child\n---\n')
-    writeFileSync(jsonPath, graph([{ id: 'a', md: 'a.md', dir: 'ctx/a' }, { id: 'p', md: 'p.md', dir: 'ctx/a/sub' }]))
+    writeFileSync(planPath, graph({ a: { md: 'a.md', dir: 'ctx/a' }, p: { md: 'p.md', dir: 'ctx/a/sub' } }))
     await expect.poll(() => s.current().result.plan.nodes.length, { timeout: 3000 }).toBe(2)
     await pause(300)
-    writeFileSync(jsonPath, graph([{ id: 'a', md: 'a.md', dir: 'ctx/a' }]))
+    writeFileSync(planPath, graph({ a: { md: 'a.md', dir: 'ctx/a' } }))
     await expect.poll(() => s.current().result.plan.nodes.length, { timeout: 3000 }).toBe(1)
     await pause(300)
     writeFileSync(join(root, 'ctx/a/sub/late.txt'), 'planted after')
@@ -156,10 +156,10 @@ describe('watchedSource', () => {
   it('keeps watching a node folder inside a dropped node folder', async () => {
     mkdirSync(join(root, 'ctx/a/sub'))
     writeFileSync(join(root, 'ctx/a/sub/s.md'), '---\ntitle: Inner\n---\n')
-    writeFileSync(jsonPath, graph([{ id: 'a', md: 'a.md', dir: 'ctx/a' }, { id: 's', md: 'ctx/a/sub/s.md' }]))
+    writeFileSync(planPath, graph({ a: { md: 'a.md', dir: 'ctx/a' }, s: { md: 'ctx/a/sub/s.md' } }))
     await expect.poll(() => s.current().result.plan.nodes.length, { timeout: 3000 }).toBe(2)
     await pause(300)
-    writeFileSync(jsonPath, graph([{ id: 's', md: 'ctx/a/sub/s.md' }]))
+    writeFileSync(planPath, graph({ s: { md: 'ctx/a/sub/s.md' } }))
     await expect.poll(() => s.current().result.plan.nodes.length, { timeout: 3000 }).toBe(1)
     await pause(300)
     writeFileSync(join(root, 'ctx/a/sub/new.txt'), 'still watched')
@@ -176,10 +176,10 @@ describe('watchedSource', () => {
   })
   it('watches a plan that itself lives under a node_modules folder', async () => {
     const nested = makeFolder({
-      'node_modules/plan/graph.json': graph([{ id: 'a', md: 'a.md' }]),
+      'node_modules/plan/graph.yaml': graph({ a: { md: 'a.md' } }),
       'node_modules/plan/a.md': '---\ntitle: Inside\n---\n',
     })
-    const inner = watchedSource(join(nested, 'node_modules/plan/graph.json'))
+    const inner = watchedSource(join(nested, 'node_modules/plan/graph.yaml'))
     try {
       await settle(inner)
       writeFileSync(join(nested, 'node_modules/plan/a.md'), '---\ntitle: Edited\n---\n')
@@ -190,10 +190,10 @@ describe('watchedSource', () => {
   })
   it('holds the last reload error until a good reload clears it', async () => {
     expect(s.error?.()).toBeNull()
-    writeFileSync(jsonPath, '{ nope')
+    writeFileSync(planPath, 'name: [unclosed\n')
     await nextEvent(s)
-    expect(s.error?.()).toEqual(expect.stringContaining('graph.json'))
-    writeFileSync(jsonPath, graph([{ id: 'a', md: 'a.md', dir: 'ctx/a' }]))
+    expect(s.error?.()).toEqual(expect.stringContaining('graph.yaml'))
+    writeFileSync(planPath, graph({ a: { md: 'a.md', dir: 'ctx/a' } }))
     expect((await nextEvent(s)).type).toBe('reload')
     expect(s.error?.()).toBeNull()
   })
@@ -210,7 +210,7 @@ describe('watchedSource', () => {
   it('sends nothing for a symlink in a node folder at start', async () => {
     symlinkSync(makeFolder({}), join(root, 'ctx/a/link-out'))
     await pause(500) // past the OS reporting the symlink's own creation
-    const linked = watchedSource(jsonPath)
+    const linked = watchedSource(planPath)
     try {
       const events: LiveEvent[] = []
       linked.on(e => events.push(e))

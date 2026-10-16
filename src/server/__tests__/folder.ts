@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { stringify } from 'yaml'
 
 const made: string[] = []
 
@@ -19,4 +20,9 @@ export function makeFolder(files: Record<string, string | Buffer>): string {
 /** Deletes every folder `makeFolder` made so far. */
 export function removeFolders(): void {
   for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true })
+}
+
+/** A plan file's text: `name` and `nodes` (keyed by id) as YAML. */
+export function planText(name: string, nodes: Record<string, Record<string, unknown> | null>): string {
+  return stringify({ name, nodes })
 }

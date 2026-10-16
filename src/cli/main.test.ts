@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:net'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { makeFolder, removeFolders } from '../server/__tests__/folder.js'
+import { makeFolder, planText, removeFolders } from '../server/__tests__/folder.js'
 import type { RunningServer } from '../server/index.js'
 import { USAGE } from './args.js'
 import { run, type Io } from './main.js'
@@ -21,14 +21,14 @@ const canBindAll = await new Promise<boolean>(resolve => {
   probe.listen(0, '0.0.0.0', () => probe.close(() => resolve(true)))
 })
 
-const GRAPH = JSON.stringify({ name: 'Orchard', nodes: [{ id: 'a', md: 'a.md' }] })
+const GRAPH = planText('Orchard', { a: { md: 'a.md' } })
 
 let root: string
 let bad: string
 let running: RunningServer[] = []
 
 beforeEach(() => {
-  root = makeFolder({ 'graph.json': GRAPH, 'a.md': '---\ntitle: Prune the pears\n---\n' })
+  root = makeFolder({ 'graph.yaml': GRAPH, 'a.md': '---\ntitle: Prune the pears\n---\n' })
   bad = makeFolder({})
 })
 afterEach(async () => {
@@ -67,15 +67,22 @@ describe('run', () => {
     expect((await start([root, '--port', 'x'], io)).code).toBe(2)
     expect(io.errLines).toHaveLength(1)
   })
-  it('exits 1 with the loader error for invalid JSON and for a missing path', async () => {
-    writeFileSync(join(bad, 'graph.json'), '{ "name": 3, "nodes": [] }')
+  it('exits 1 with the loader error for invalid YAML and for a missing path', async () => {
+    writeFileSync(join(bad, 'graph.yaml'), 'name: 3\nnodes: {}\n')
     const invalid = capture()
     expect(await start([bad, '--port', '0'], invalid)).toEqual({ code: 1 })
     expect(invalid.errLines).toEqual(['depgraph-view: name must be a string'])
     const io = capture()
-    expect(await start([join(root, 'nope.json'), '--port', '0'], io)).toEqual({ code: 1 })
+    expect(await start([join(root, 'nope.yaml'), '--port', '0'], io)).toEqual({ code: 1 })
     expect(io.errLines).toHaveLength(1)
     expect(io.errLines[0]).toMatch(/^depgraph-view: /)
+    expect(io.outLines).toEqual([])
+  })
+  it('exits 1 with the README pointer for a folder holding only graph.json', async () => {
+    writeFileSync(join(bad, 'graph.json'), '{}')
+    const io = capture()
+    expect(await start([bad, '--port', '0'], io)).toEqual({ code: 1 })
+    expect(io.errLines).toEqual(['depgraph-view: graph.json: JSON graph files are no longer read; rewrite it as graph.yaml (see README "From graph.json")'])
     expect(io.outLines).toEqual([])
   })
   it('exits 1 when the given port is in use', async () => {
@@ -120,7 +127,7 @@ describe('run', () => {
   })
   it('prints warnings to stderr only', async () => {
     const dir = makeFolder({
-      'graph.json': JSON.stringify({ name: 'Orchard', nodes: [{ id: 'a', md: 'a.md' }, { id: 'x', md: 'x.md' }] }),
+      'graph.yaml': planText('Orchard', { a: { md: 'a.md' }, x: { md: 'x.md' } }),
       'a.md': '---\ntitle: Prune the pears\n---\n',
     })
     const io = capture()

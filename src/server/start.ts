@@ -39,9 +39,9 @@ const DEFAULT_DIST = fileURLToPath(new URL('../../dist/', import.meta.url))
  * Throws GraphError when the graph cannot be loaded.
  */
 export async function startServer(options: ServerOptions): Promise<RunningServer> {
-  const jsonPath = resolveGraphPath(options.path)
-  const watched = options.watch === false ? null : watchedSource(jsonPath)
-  const source = watched ?? staticSource(jsonPath)
+  const planPath = resolveGraphPath(options.path)
+  const watched = options.watch === false ? null : watchedSource(planPath)
+  const source = watched ?? staticSource(planPath)
   const host = options.host ?? '127.0.0.1'
   const loopback = isLoopback(host)
   // The handler refuses a missing Host itself (403, nosniff) instead of Node's bare 400.
