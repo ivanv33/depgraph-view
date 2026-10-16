@@ -177,7 +177,7 @@ Valid values, and how to clear each:
 - `tags`: a bracketed list of strings. Add or remove items and keep the rest.
 - `due`: a real date `YYYY-MM-DD`, and only one the user gave. Convert "next Friday" against today's date and confirm it with the user. Clear by removing the key.
 - `priority`: `low` or `high`. "Normal" is written by removing the key (`normal` is accepted but means the same as absent).
-- `hold`: 1 to 200 characters saying what must be known before the step can be broken into smaller steps; the viewer counts held steps in its legend as On hold. It is not `blocked`: a held step is a stage not yet planned in detail, a blocked one is stuck. Clear it by removing the key, never by writing an empty value (that rejects the card).
+- `hold`: 1 to 200 characters saying what must be known before the step can be broken into smaller steps; the viewer counts held steps in its legend as On hold. It is not `blocked`: a held step is a stage not yet planned in detail, a blocked one is stuck. Clear it by removing the key: `hold: ""` rejects the card, and a bare `hold:` only counts as absent.
 - The body: free markdown below the closing `---`. Leave the frontmatter untouched when editing the body.
 
 ### Check the plan

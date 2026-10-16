@@ -357,6 +357,11 @@ describe('references/format.md', () => {
     expect(r.plan.nodes.map(n => n.id)).toEqual(['a', 'b'])
   })
 
+  it('card YAML line numbers count from the first frontmatter line', () => {
+    // The duplicate title is on file line 3; the message counts from the line after the opening ---, so it says line 2.
+    expect(() => loadIn(kitchen('{}', 'title: Buy flour\ntitle: Buy rye\n'))).toThrow(/^node "buy-flour": Map keys must be unique at line 2, column 1$/)
+  })
+
   it('the table helpers read rows and match messages', () => {
     const md = '## Refusals\n\n| Message | Cause | Fix |\n| --- | --- | --- |\n| `node "<id>": line L` | x | y |\n\n## Warnings\n'
     expect(tableMessages(md, '## Refusals')).toEqual(['node "<id>": line L'])

@@ -19,8 +19,8 @@ The plan folder is the folder that holds the plan file. Every path in the plan i
 
 The plan file is YAML 1.2, read with unique keys: the same key twice in one mapping refuses the file. Its top level is a mapping (an empty file is refused the same way as a list):
 
-- `name`: required, a string. Missing, bare (`name:`) or a list is refused; a number or boolean (`name: 2027`) is refused with a hint to quote it.
-- `nodes`: required, a mapping from step id to step. `nodes: {}` and a bare `nodes:` are both an empty plan. Missing, or written as a list (`- buy-flour`), is refused.
+- `name`: required, a string; only the type is checked, so `name: ""` loads. Missing, bare (`name:`) or a list is refused; a number or boolean (`name: 2027`) is refused with a hint to quote it.
+- `nodes`: required, a mapping from step id to step. `nodes: {}` and a bare `nodes:` are both an empty plan. Missing, written as a list (`- buy-flour`), or a single value (`nodes: buy-flour`) is refused.
 - Any other top-level key is ignored with a warning.
 
 ## A step
@@ -78,7 +78,7 @@ Card errors of the value kind (a wrong `title`, `description`, `status`, `tags`,
 
 - A path that leaves the plan folder, by `..`, an absolute path elsewhere, or a symlink whose target is outside, drops the step with a warning.
 - A given `md` that does not exist, or is not a file, drops the step with a warning.
-- A missing default card keeps the step with a warning: it shows its id as the title and every default.
+- A missing default card keeps the step with a warning: it takes any card keys written on its YAML step, and the defaults for the rest (its id as the title).
 - A given `dir` that does not exist, or is not a folder, keeps the step with a warning and no files.
 - A step's files are every file below its folder, in subfolders too, skipping `.git` and `node_modules` folders and anything whose real path leaves the step's folder. The first 500, sorted by path, are listed; more gives a warning.
 - Only the YAML makes a step. A folder under `nodes/` that no step names is not read, and neither is anything else in the plan folder, such as `deleted/`.
@@ -88,7 +88,7 @@ Card errors of the value kind (a wrong `title`, `description`, `status`, `tags`,
 
 At startup, a refused plan prints `depgraph-view: <message>` on stderr and exits with code 1. A plan that loads prints its URLs on stdout and each warning as `warning: <message>` on stderr; the page also lists the warnings in a collapsed list in its bottom-left corner. While the viewer watches the files, a change that breaks the plan shows the message in a banner on the page, which keeps showing the last plan that loaded; after a good reload the page's warnings list is the current one (stderr lines are printed only at startup).
 
-A YAML syntax error in the plan file is prefixed with the file's name (`kitchen.yaml: `); every message about one step or card starts `node "<id>": `. The tables give each message exactly as printed after `depgraph-view: ` or `warning: `. In them, `<...>` stands for a name, an id or a list, and `L`, `C` and `N` stand for numbers.
+A YAML syntax error in the plan file is prefixed with the file's name (`kitchen.yaml: `); most messages about one step or card start `node "<id>": ` (not `id "<id>" does not match ...`, `node id <id> is not a string ...` or `cycle: ...`). A line and column in a card's message count from the first line after the opening `---`, so the file line is L + 1; line numbers for the plan file are the file's own. The tables give each message exactly as printed after `depgraph-view: ` or `warning: `. In them, `<...>` stands for a name, an id or a list, and `L`, `C` and `N` stand for numbers.
 
 ## Refusals
 
@@ -97,7 +97,7 @@ A YAML syntax error in the plan file is prefixed with the file's name (`kitchen.
 | `graph must be a mapping` | The file's top level is not a mapping (a list, a word, or an empty file). | Rewrite it as `name:` and `nodes:`. |
 | `name must be a string` | `name` is missing, bare, or a list or mapping. | Add `name: <title>` at the top. |
 | `name must be a string: quote it as "<name>"` | `name` reads as a number or boolean (`name: 2027`). | Quote it, as the message shows. |
-| `nodes must be a mapping` | `nodes` is missing, or written as a list (`- buy-flour`). | Write `nodes:` with one `<id>: {}` line per step under it. |
+| `nodes must be a mapping` | `nodes` is missing, written as a list (`- buy-flour`), or a single value (`nodes: buy-flour`). | Write `nodes:` with one `<id>: {}` line per step under it. |
 | `id "<id>" does not match ^[a-z0-9][a-z0-9-]*$` | An id has capitals, underscores, spaces or other characters (`Buy_Flour`). | Lower-case it with hyphens only, and rename it everywhere it is named. |
 | `node id <id> is not a string: quote it as "<id>"` | An id reads as a number or boolean (`2027: {}`). | Quote the key, and every `needs` item that names it. |
 | `node id must be a string such as dig-beds` | An id is not text and quoting it would not make a valid id (`1.5: {}`). | Choose an id that matches the pattern. |
@@ -131,7 +131,7 @@ A YAML syntax error in the plan file is prefixed with the file's name (`kitchen.
 | `<file>: cannot be read (<code>)` | The plan file exists but cannot be read (`<code>` is the system's error code, such as `EACCES`). | Tell the user; the file's permissions are theirs to fix. |
 | `port N is in use` | `--port N` was given and that port is taken. | See `viewer.md`. |
 
-Any other message after `<file>: ` or `node "<id>": ` is the YAML parser's own, about invalid YAML in the plan file or that card; most name the line and column. Read that spot: quoting the value fixes most.
+Any other message after `<file>: ` or `node "<id>": ` is the YAML parser's own, about invalid YAML in the plan file or that card; most name the line and column. Read that spot: quoting the value fixes most. A system error code after `depgraph-view: `, such as `EACCES: permission denied, open '<path>'`, means a file the viewer cannot read: tell the user.
 
 ## Warnings
 
