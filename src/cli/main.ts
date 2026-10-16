@@ -2,6 +2,7 @@ import { startServer, type RunningServer } from '../server/index.js'
 import { isLoopback } from '../server/urls.js'
 import { parseArgs } from './args.js'
 import { openBrowser } from './open.js'
+import { validate } from './validate.js'
 
 export interface Io {
   out(line: string): void
@@ -10,8 +11,8 @@ export interface Io {
 
 /**
  * Runs `depgraph-view` with `argv` (the arguments after the program name). Code 0 without a server after
- * printing the usage for `-h`/`--help`, 2 on a usage error, 1 when the server cannot start, 0 with the
- * running server otherwise. Prints every URL to stdout (the first is the one `--open` opens) and, for a bind
+ * printing the usage for `-h`/`--help`, 2 on a usage error, `validate`'s own code (see VALIDATE_EXIT) without a
+ * server, 1 when the server cannot start, 0 with the running server otherwise. Prints every URL to stdout (the first is the one `--open` opens) and, for a bind
  * beyond loopback, a warning to stderr. Never throws, never exits;
  * `open` is how `--open` shows the page (tests pass their own).
  */
@@ -25,6 +26,7 @@ export async function run(argv: string[], io: Io, open: (url: string) => void = 
     io.err(args.error)
     return { code: 2 }
   }
+  if ('command' in args) return { code: validate(args.path, args.json, io) }
   let server: RunningServer
   try {
     server = await startServer({ path: args.path, port: args.port, host: args.host, watch: args.watch })

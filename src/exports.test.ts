@@ -21,7 +21,7 @@ describe('package exports', () => {
   })
 
   it.skipIf(!built)('server-safe subpaths load by name in plain Node, through the exports map', () => {
-    // a self-reference by package name goes through `exports`; v0.2.1 refuses it with ERR_PACKAGE_PATH_NOT_EXPORTED
+    // a self-reference by package name goes through `exports`; the 0.2 series refused it with ERR_PACKAGE_PATH_NOT_EXPORTED
     const script = [
       "const s = await import('depgraph-view/engine/schema')",
       "const p = await import('depgraph-view/view/PriorityMark')",
@@ -68,6 +68,6 @@ describe('package exports', () => {
   it('the root exports the app-facing pieces', () => {
     const index = read('src/view/index.ts').replace(/from\s+'[^']*'/g, '') // text: importing `.` would load react-force-graph-3d; module paths must not satisfy the match
     for (const name of ['PriorityMark', 'PriorityMarkProps', 'STATE_NAME', 'STATE_SWATCH', 'LegendList', 'useGrouping', 'useToday',
-      'useElementHeight', 'useElementEdge', 'WindowEdge', 'HostChrome']) expect(index, name).toMatch(new RegExp(`\\b${name}\\b`))
+      'useElementHeight', 'useElementEdge', 'WindowEdge', 'HostChrome', 'NodeSignal', 'PickMode']) expect(index, name).toMatch(new RegExp(`\\b${name}\\b`))
   })
 })

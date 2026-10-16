@@ -8,7 +8,7 @@ compatibility: Node 20.19 or newer and npx; the first viewer run downloads and b
 
 # depgraph plans
 
-A depgraph plan is a folder of plain files: one YAML file listing the steps and what each one needs, and one markdown card per step. The viewer reads them and draws the plan as a layered graph. This skill writes and changes those files so the viewer loads them with no warnings, then runs the viewer to check and show the plan.
+A depgraph plan is a folder of plain files: one YAML file listing the steps and what each one needs, and one markdown card per step. The viewer reads them and draws the plan as a layered graph. This skill writes and changes those files so the viewer loads them with no warnings, then runs the viewer's `validate` command to check the plan and the viewer itself to show it.
 
 You record the steps the user gives, or the steps you and the user agree on. You do not invent steps, dates, owners, priorities or descriptions: leave out what the user did not say.
 
@@ -192,24 +192,26 @@ First, a reading pass while you edit, because it is cheap and catches mistakes b
 - every step has its card at the default path (or at its given `md`);
 - every card's frontmatter has only the seven keys, with valid values.
 
-Then the authoritative check: the viewer's own loader, run once without watching and on a port the OS picks. Run it in the background, with its output in your own scratch place as `references/viewer.md` says under "What it prints", from the folder that contains `play/`, or pass the plan folder's path. In both commands here, replace `play` with your own plan folder or `.yaml` path:
+Then the authoritative check: the viewer's `validate` command, which loads the plan with the viewer's own loader, prints what it found and exits. It serves nothing and opens nothing, so there is no port and nothing to stop. Run it from the folder that contains `play/`, or pass the plan folder's path; replace `play` with your own plan folder or `.yaml` path:
 
 ```sh
-npx --yes github:ivanv33/depgraph-view#v0.2.2 play --no-watch --port 0
+npx --yes github:ivanv33/depgraph-view#v0.3.0 validate play
 ```
 
-- If it exits with code 1, its stderr line (`depgraph-view: <message>`) is the refusal. Look it up in `references/format.md`, fix it, and run again.
-- If it prints a URL, the plan loaded. Any `warning:` lines on stderr are still to fix; the same table has each one.
-- Then stop the process you started with SIGTERM (`kill <pid>`) and confirm the port is free, as `references/viewer.md` says under "Stopping".
+Read the exit code first, then the output:
 
-`--port 0` avoids every port clash, and `--no-watch` keeps it from following the files. The first run downloads and builds the viewer, which can take a minute or more: wait until it prints a URL or exits. Later runs start in a second or two. `--yes` stops npx from waiting on an install prompt in a non-interactive shell.
+- `0`: the plan loads with no warnings. stdout has one summary line, such as `Spring school play: 8 steps, 9 links, no warnings`.
+- `1`: the plan loads, with warnings. Each is a `warning: <message>` line on stderr, and the summary ends `N warnings`. Look each up in `references/format.md`, fix it, and run again.
+- `2`: the plan is refused (or the command line is wrong). stderr has one line, `depgraph-view: <message>`, and stdout is empty. Look the message up in `references/format.md`, fix it, and run again.
 
-When the user asked to see the plan, the check and the showing are one run: start the viewer as below; if it exits 1, fix and start again; if it prints warnings, fix them while it runs; it reloads by itself and prints nothing more, so confirm in `/api/graph` that `generatedAt` changed and `warnings` is empty, and that `/events` shows no `event: error` (see `references/viewer.md`, "Live reload"); when in doubt, run the check run again.
+Exit `1` with no summary line on stdout is npx itself failing (install, build, Node too old), not plan warnings: read its real output before judging the plan. Only exit `0` is a clean plan. The first run downloads and builds the viewer, which can take a minute or more: wait until it exits. Later runs take a second or two. `--yes` stops npx from waiting on an install prompt in a non-interactive shell.
+
+When the user asked to see the plan, check first, then start the viewer as below once `validate` exits `0`. While it runs, it reloads by itself after every edit and prints nothing more, so after each batch of edits run `validate` again: it never touches the running viewer.
 
 ## Showing the plan
 
 ```sh
-npx --yes github:ivanv33/depgraph-view#v0.2.2 play
+npx --yes github:ivanv33/depgraph-view#v0.3.0 play
 ```
 
 - Run it in the background so the session stays free. It prints the URL on stdout and serves until stopped. Give the user the URL, read from that output.
@@ -217,7 +219,7 @@ npx --yes github:ivanv33/depgraph-view#v0.2.2 play
 - The viewer follows the files and reloads the page on every change, so after edits there is no restart; tell the user the page will update.
 - Before starting a second viewer, check whether you already started one for this plan, and reuse it.
 - Without `--port`, the viewer takes the first free port from 4310 upward, so the URL may say 4311 or 4312. Always read the port from the printed URL; never assume 4310. With `--port N`, a taken port is an error (`depgraph-view: port N is in use`, exit 1); `references/viewer.md` says how to handle it.
-- Use `--host` only when the user asks to open the plan from another device. It serves the plan to the network: anyone who can reach the port can read the plan and every step's folder. Repeat that warning to the user in plain words before starting, and never use `--host` for the check run.
+- Use `--host` only when the user asks to open the plan from another device. It serves the plan to the network: anyone who can reach the port can read the plan and every step's folder. Repeat that warning to the user in plain words before starting, and never use `--host` for anything but showing.
 - Stop only a viewer you started: when the user says they are done, or before the session ends if the user asked for that; otherwise leave it running and say so. Never stop a process you did not start.
 - The viewer needs Node 20.19 or newer; if `node --version` is older, tell the user rather than trying anyway.
 
@@ -235,4 +237,4 @@ Exit codes, stopping and confirming the port is free, and the network details ar
 - Never invent a due date, priority, hold or description: leave out what the user did not give.
 - Never break a cycle by picking a link to drop: ask, because only the user knows which link is wrong.
 - Never use `--host` unless the user asked for network access, and never stop a process you did not start: one exposes the plan, the other may be someone else's work.
-- Never say a plan is done while the viewer's check prints an error or a warning: the check is the only proof the viewer accepts it.
+- Never say a plan is done while `validate` exits anything but `0`: the check is the only proof the viewer accepts it.

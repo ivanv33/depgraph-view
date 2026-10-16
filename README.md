@@ -7,7 +7,7 @@ A read-only 3D viewer for dependency graphs. Point it at a plan YAML file that l
 ## Quick start
 
 ```sh
-npx github:ivanv33/depgraph-view#v0.2.2 garden
+npx github:ivanv33/depgraph-view#v0.3.0 garden
 ```
 
 `garden` is a folder holding the plan file `garden.yaml` (see [The plan file](#the-plan-file)). This runs the viewer straight from GitHub. A git install builds from source, so the first run takes a minute.
@@ -44,13 +44,13 @@ npx https://github.com/ivanv33/depgraph-view garden
 To pin a release, add its tag:
 
 ```sh
-npx github:ivanv33/depgraph-view#v0.2.2 garden
+npx github:ivanv33/depgraph-view#v0.3.0 garden
 ```
 
 As a dependency in `package.json`:
 
 ```json
-"depgraph-view": "github:ivanv33/depgraph-view#v0.2.2"
+"depgraph-view": "github:ivanv33/depgraph-view#v0.3.0"
 ```
 
 A git install builds the package from source, so it is slower than installing the npm package.
@@ -70,6 +70,7 @@ The first installs it into the current project; the second installs it for your 
 
 ```
 depgraph-view <path> [--port N] [--host ADDR] [--open] [--no-watch]
+depgraph-view validate <path> [--json]
 ```
 
 | Argument | Meaning |
@@ -90,6 +91,16 @@ On start the URL goes to stdout. With `--host 0.0.0.0` or `::`, stdout gets one 
 | `0` | The server started (and later stopped on SIGINT or SIGTERM), or `-h` / `--help` printed the usage. |
 | `1` | The server could not start: a plan file that is not YAML or that the rules refuse, a missing path, a folder with no plan file (or with several `.yaml` files and none named after the folder), an old JSON graph file (see [From graph.json](#from-graphjson)), a `--port` that is in use, or a `--host` that cannot be bound. The message is printed to stderr as `depgraph-view: <message>`. |
 | `2` | Usage error: no path, two paths, an unknown option, a bad `--port` value or a `--host` without a value. The usage is printed to stderr. |
+
+### validate
+
+`depgraph-view validate <path>` loads the plan once, with the same loader and the same messages as the server, and exits: it serves nothing, opens no browser and watches nothing. A refusal goes to stderr as `depgraph-view: <message>` and each warning as `warning: <message>`, the same lines the server prints at start. A plan that loads gets one summary line on stdout, such as `Vegetable garden: 3 steps, 2 links, no warnings` (or `..., 2 warnings`). With `--json`, stdout gets one JSON object instead, `{ "name", "steps", "links", "warnings": [...], "errors": [...] }` (`name` is `null` and `errors` holds the message when the plan is refused); stderr is the same. A folder named `validate` is still a path when written as `./validate`.
+
+| Code | When |
+| --- | --- |
+| `0` | The plan loads with no warnings. |
+| `1` | The plan loads, with warnings. |
+| `2` | The plan cannot be loaded (any refusal, a missing path, a folder with no plan file), or a usage error. |
 
 ## The plan file
 
@@ -284,6 +295,8 @@ The viewer's React components and the layout engine are exported for embedding i
 
 `viewer.css` carries Tailwind's preflight (a CSS reset) and page globals: the `body` font and `color-scheme: dark`. Importing it changes those for the whole embedding page.
 
+A host with its own Tailwind v4 skips `viewer.css`. It imports `depgraph-view/labels.css` and `depgraph-view/deckList.css` instead (the label and deck-list rules only, no preflight; `Panel`'s markdown styles live only in `viewer.css`), and adds an `@source` for `node_modules/depgraph-view/lib/view`, relative to its stylesheet, so the package's classes are generated. From `src/app/globals.css` that is `@source "../../node_modules/depgraph-view/lib/view"`. A host without Tailwind imports `depgraph-view/viewer.css` as above.
+
 ```tsx
 import { Graph, Panel, Search, Legend } from 'depgraph-view'
 import 'depgraph-view/viewer.css'
@@ -305,7 +318,7 @@ import 'depgraph-view/viewer.css'
 | --- | --- | --- |
 | `plan` | `Plan` | `{ name, nodes }`, the shape `/api/graph` returns as `plan`. |
 | `selected` | `string \| null` | The selected step's id. |
-| `onSelect` | `(id: string \| null) => void` | Called on a click: a step's id, or `null` for the background. |
+| `onSelect` | `(id: string \| null) => void` | Called on a click: a step's id, or `null` for the background. With `onPick` given it is called only with `null` (a deselect), and every step pick goes to `onPick`. |
 | `grouped` | `boolean` | Draw only the path to the selection and its subtree; other branches fold into decks. |
 | `today` | `string` | The local date, `YYYY-MM-DD`, that due dates are read against. |
 | `insets` | `{ top, right, bottom, left }` | How far the host's chrome (toolbar, panel) reaches in from each window edge, in CSS pixels. `Graph` never measures the host page. Whatever the insets say, `Graph` always keeps a 72 px top band clear and, while `legend` is on, the Legend's corner: the whole plan keeps a 240 px left band or the band above the Legend, whichever shows it larger, only when it would otherwise reach that corner. When the insets change (a panel opens or closes), `Graph` frames again into the new free area, unless the user has moved the camera since the last frame. |
@@ -313,16 +326,33 @@ import 'depgraph-view/viewer.css'
 | `onGlides` | `(history) => void` | Optional. Receives the transition timing history after each transition. |
 | `focusFallback` | `() => HTMLElement \| null` | Optional. Where keyboard focus goes when no step label can take it. |
 | `legend` | `boolean` | Optional, default `true`. Whether the host shows the Legend in the bottom-left corner; when `false` the frames use its room. |
+| `onPick` | `(id: string, mode?: 'link' \| 'edit' \| 'shift') => void` | Optional. Given, every step pick (a label, a deck's row, a deck's open-branch button, the selected step's own text) calls it instead of `onSelect(id)`; a deselect still calls `onSelect(null)`. `mode` says how the press was made: Meta is `'link'`, Ctrl or the context menu is `'edit'`. Shift never reaches it: with `onShiftLink` it links, otherwise it is a plain pick. |
+| `arming` | `boolean` | Optional. The host is waiting for the step to link to (its own link mode): a Shift pick is then a plain pick, a click on a done deck only shakes it, the deck list says to pick a step and its rows move no focus, and the cursor is a crosshair. |
+| `onShiftLink` | `(from: string, to: string) => void` | Optional. Given, Shift+click on a step and then on another links them: called with the step the first click was on and the one the second was on. Absent, Shift+click is a plain pick and none of the linking runs. |
+| `onAddAt` | `(x: number, y: number) => void` | Optional. Given, Shift+click on empty canvas calls it with the click's window point. Absent, that click deselects. |
+| `onLinkContextMenu` | `(dependencyId: string, dependentId: string) => void` | Optional. Given, a right click on a dependency line calls it with the step that is needed and the step that needs it. A line to or from a deck stands for several dependencies and calls nothing. |
+| `flyTo` | `NodeSignal \| null` | Optional. `NodeSignal` is `{ id: string; seq: number }`. A new `seq` glides the camera to put the step (a step folded into a deck: its deck) clear of the top, left and bottom strips (the insets, the passive insets and the legend) but not the right ones, once the view has settled and the step is still the selected one; it reads those strips once, when the signal arrives. Without it nothing flies. |
+| `shake` | `NodeSignal \| null` | Optional. A step whose label shakes: a new `seq` shakes it once (a refusal, say). |
+| `marked` | `{ ids: string[]; seq: number } \| null` | Optional. Steps to mark: a new `seq` puts `data-added="true"` on their labels for a couple of seconds (the host styles it, as the viewer's own label sheet does). A step not drawn yet is marked once it is. |
+| `onOpenedDone` | `(ids: ReadonlySet<string>) => void` | Optional. Called with the decks opened to show their members, on mount and each time they change (a selection that moves on drops them). |
+| `passiveInsets` | `Partial<Insets>` | Optional. Strips of the window the host covers without wanting the cues kept clear of them (a sheet that rests beside the panel). Each frame `Graph` starts (a selection, a fit, a focus reveal) keeps them clear too, added to the insets; a fly (`flyTo`) does the same for the top, left and bottom strips only, and a change in them never frames again by itself. |
+| `chrome` | `HostChrome` | Optional. `{ toolbar?, panel?, hud?, chip? }`, each a box `{ left, top, right, bottom }` in window pixels, for what `insets` cannot describe: the `chip` (a small box the cues keep clear of) and, to replace the ones derived from the insets, the `toolbar`, `panel` and `hud` (the bottom card: the edge cues' free area ends at its top). The cues and a deck's list keep clear of them. |
+
+Every prop after `fitAll` is optional. `Graph` stays read-only: it reports gestures through these callbacks and changes nothing itself.
 
 ### The other components
 
 - `Panel` (`PanelProps`: `plan`, `id`, `body`, `files`, `today`, `onSelect`, `onClose`) is the step panel. It is as tall as its content, up to the height its container allows; past that the part under its title scrolls.
 - `Search` (`SearchProps`: `plan`, `today`, `onPick`) is the search box.
-- `Legend` shows the counts per readiness state (Ready, Doing, Waiting, Blocked, Done) and on hold, plus the priority marks and the edge key.
+- `Legend` shows the counts per readiness state (Ready, Doing, Waiting, Blocked, Done) and on hold, plus the priority marks and the edge key. It takes an optional `list` (`LegendList`: `{ open, onToggle, controls }`); given, its Ready and Doing rows become buttons that call `onToggle`, to open the host's ready list (`controls` is that list's id, for `aria-controls`).
+- Also exported from the root: `PriorityMark` (`PriorityMarkProps`), `STATE_NAME` and `STATE_SWATCH` (the readiness states' names and colours), the hooks `useGrouping`, `useToday`, `useElementHeight` and `useElementEdge` (with the `WindowEdge` type), and the types `Insets`, `HostChrome`, `NodeSignal` and `PickMode`.
 
-### Two more entry points
+### More entry points
 
 - `depgraph-view/engine`: the layout, schema and label modules as namespaces, for example `schema` (`validatePlan`, `ID_RE`, the `Plan` types), `layered`, `grouping`, `graphData`, `camera`, `frame`. The label modules build DOM and need a browser `document`.
+- `depgraph-view/engine/<module>`: one engine module by name, for example `depgraph-view/engine/frame`.
+- `depgraph-view/view/<module>`: one view module by name, for code that must not load `Graph` and its 3D library, such as server code: `depgraph-view/view/PriorityMark`, `depgraph-view/view/focusSoon`, `depgraph-view/view/hooks/<hook>`.
+- `depgraph-view/labels.css` and `depgraph-view/deckList.css`: the two stylesheets for a host with its own Tailwind (see above).
 - `depgraph-view/server` (Node only):
   - `startServer({ path, port?, host?, watch?, distDir? })` resolves to `{ url, urls, port, warnings, close() }`. `host` defaults to `127.0.0.1`; `urls` lists every URL it is reachable at and `url` is the first.
   - `loadGraph(rootDir, yaml)` is the loader behind [The plan file](#the-plan-file): `yaml` is the plan file's text. It reads the md files and folders under `rootDir` and returns `{ plan, resources, bodies, warnings, ... }`.
