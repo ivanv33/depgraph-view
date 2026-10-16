@@ -2,7 +2,7 @@
 
 A read-only 3D viewer for dependency graphs. Point it at a `graph.json` whose nodes name a markdown file each. It serves the graph on `127.0.0.1` (or your network, with `--host`) as a force-directed, layered 3D view. You can pan, zoom, group branches, search steps by title or id, and open a step to read its markdown, its dependencies and the files in its folder. It follows the files on disk and reloads the page when they change. Nothing is ever written: there is no editing, no upload and no write route.
 
-![The viewer showing an eleven-step garden plan as a layered graph, with the step "Spread compost on the beds" selected and its panel open on the right: the step's text and image, the steps it depends on and is needed by, and its two files](https://raw.githubusercontent.com/ivanv33/depgraph-view/main/docs/viewer.png)
+<img src="https://raw.githubusercontent.com/ivanv33/depgraph-view/main/docs/viewer.png" width="830" alt="The viewer showing an eight-step garden plan as a layered graph, with the step &quot;Spread compost on the beds&quot; selected and its panel open on the right: the step's text and image, the steps it depends on and is needed by, and its two files">
 
 ## Quick start
 
@@ -158,7 +158,7 @@ At startup a rejected file ends the CLI with exit code 1. While watching, a chan
 
 ## What the viewer shows
 
-![The same garden plan with no step selected: eleven steps in layers, dependencies drawn as arrows, the toolbar top left and the legend bottom left](https://raw.githubusercontent.com/ivanv33/depgraph-view/main/docs/graph.png)
+<img src="https://raw.githubusercontent.com/ivanv33/depgraph-view/main/docs/graph.png" width="830" alt="The same garden plan with no step selected: eight steps in layers, dependencies drawn as arrows, the toolbar top left and the legend bottom left">
 
 - **The graph.** Each step is a node with its title, laid out in layers along its dependencies. Click a step to select it. Click the background to clear the selection. Escape clears it too.
 - **The toolbar** (top left) holds the search box and two buttons. `Group` draws only the path to the selection and its subtree, and folds every other branch into a deck. It is on by default, and the browser remembers your choice. `Fit` frames the whole plan and keeps the selection.
