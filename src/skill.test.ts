@@ -8,6 +8,7 @@ import { ID_RE } from './engine/schema.js'
 import { COMMON_KEYS, splitNodeFile } from './server/frontmatter.js'
 import { loadGraphFile, resolveGraphPath, type LoadResult } from './server/loader.js'
 import { parseGraphYaml } from './server/planYaml.js'
+import { USAGE } from './cli/args.js'
 
 // The repo root from this file, as in pack.test.ts.
 const repo = fileURLToPath(new URL('..', import.meta.url))
@@ -368,5 +369,17 @@ describe('references/format.md', () => {
     expect(messageRe('node "<id>": line L').test('node "buy-flour": line 12')).toBe(true)
     expect(messageRe('node "<id>": line L').test('node "buy-flour": line twelve')).toBe(false)
     expect(messageRe('id "<id>" does not match ^[a-z0-9]$').test('id "X" does not match ^[a-z0-9]$')).toBe(true)
+  })
+})
+
+describe('references/viewer.md', () => {
+  it('states the CLI as it is', () => {
+    const md = read(VIEWER_MD)
+    expect(md).toContain(USAGE.split('\n')[0])
+    expect(md).toContain('serving on 0.0.0.0; anyone who can reach this port can read the plan and every node folder')
+    expect(md).toContain('port N is in use')
+    expect(md).toMatch(/#v\d+\.\d+\.\d+/)
+    for (const code of ['`0`', '`1`', '`2`']) expect(md, code).toContain(code)
+    expect(md).toContain('--no-watch --port 0')
   })
 })

@@ -192,7 +192,7 @@ First, a reading pass while you edit, because it is cheap and catches mistakes b
 - every step has its card at the default path (or at its given `md`);
 - every card's frontmatter has only the seven keys, with valid values.
 
-Then the authoritative check: the viewer's own loader, run once without watching and on a port the OS picks. Run it in the background, from the folder that holds the plan:
+Then the authoritative check: the viewer's own loader, run once without watching and on a port the OS picks. Run it in the background, from the folder that contains `play/`, or pass the plan folder's path. In both commands here, replace `play` with your own plan folder or `.yaml` path:
 
 ```sh
 npx --yes github:ivanv33/depgraph-view#v0.2.1 play --no-watch --port 0
@@ -200,7 +200,7 @@ npx --yes github:ivanv33/depgraph-view#v0.2.1 play --no-watch --port 0
 
 - If it exits with code 1, its stderr line (`depgraph-view: <message>`) is the refusal. Look it up in `references/format.md`, fix it, and run again.
 - If it prints a URL, the plan loaded. Any `warning:` lines on stderr are still to fix; the same table has each one.
-- Then stop the process you started.
+- Then stop the process you started with SIGTERM (`kill <pid>`) and confirm the port is free, as `references/viewer.md` says under "Stopping".
 
 `--port 0` avoids every port clash, and `--no-watch` keeps it from following the files. The first run downloads and builds the viewer, which takes about a minute; later runs start in a second or two. `--yes` stops npx from waiting on an install prompt in a non-interactive shell.
 
