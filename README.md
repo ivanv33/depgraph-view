@@ -1,21 +1,21 @@
 # depgraph-view
 
-A read-only 3D viewer for dependency graphs. Point it at a `graph.json` whose nodes name a markdown file each. It serves the graph on `127.0.0.1` (or your network, with `--host`) as a force-directed, layered 3D view. You can pan, zoom, group branches, search steps by title or id, and open a step to read its markdown, its dependencies and the files in its folder. It follows the files on disk and reloads the page when they change. Nothing is ever written: there is no editing, no upload and no write route.
+A read-only 3D viewer for dependency graphs. Point it at a plan YAML file that lists the steps and what each one needs; each step's text is a markdown file. It serves the graph on `127.0.0.1` (or your network, with `--host`) as a force-directed, layered 3D view. You can pan, zoom, group branches, search steps by title or id, and open a step to read its markdown, its dependencies and the files in its folder. It follows the files on disk and reloads the page when they change. Nothing is ever written: there is no editing, no upload and no write route.
 
 <img src="https://raw.githubusercontent.com/ivanv33/depgraph-view/main/docs/viewer.png" width="830" alt="The viewer showing an eight-step garden plan as a layered graph, with the step &quot;Spread compost on the beds&quot; selected and its panel open on the right: the step's text and image, the steps it depends on and is needed by, and its two files">
 
 ## Quick start
 
 ```sh
-npx github:ivanv33/depgraph-view garden/graph.json
+npx github:ivanv33/depgraph-view#v0.2.0 garden
 ```
 
-This runs the viewer straight from GitHub. A git install builds from source, so the first run takes a minute.
+`garden` is a folder holding the plan file `garden.yaml` (see [The plan file](#the-plan-file)). This runs the viewer straight from GitHub. A git install builds from source, so the first run takes a minute.
 
 Once the package is published to npm:
 
 ```sh
-npx depgraph-view garden/graph.json
+npx depgraph-view garden
 ```
 
 The command prints one line, the URL, and serves until you stop it (Ctrl-C). Open the URL in a browser, or pass `--open`.
@@ -44,13 +44,13 @@ npx https://github.com/ivanv33/depgraph-view garden
 To pin a release, add its tag:
 
 ```sh
-npx github:ivanv33/depgraph-view#v0.1.0 garden
+npx github:ivanv33/depgraph-view#v0.2.0 garden
 ```
 
 As a dependency in `package.json`:
 
 ```json
-"depgraph-view": "github:ivanv33/depgraph-view#v0.1.0"
+"depgraph-view": "github:ivanv33/depgraph-view#v0.2.0"
 ```
 
 A git install builds the package from source, so it is slower than installing the npm package.
@@ -63,7 +63,7 @@ depgraph-view <path> [--port N] [--host ADDR] [--open] [--no-watch]
 
 | Argument | Meaning |
 | --- | --- |
-| `<path>` | A graph JSON file, or a folder holding exactly one `.json` file at its top level (usually `graph.json`). |
+| `<path>` | A plan YAML file (`.yaml` or `.yml`), or a folder holding `<folder>.yaml` or exactly one `.yaml` file. In a folder, a `.yml` file is not looked for: name it on the command line. |
 | `--port N` | Serve on port `N` (0–65535; `0` lets the OS pick). A port that is taken is an error. Without `--port`, the first free port from `4310` upward. |
 | `--host ADDR` | Bind `ADDR`: an IPv4 or IPv6 address, or a host name. Defaults to `127.0.0.1`. `0.0.0.0` (or `::`) serves every network interface; see [Serving on the network](#serving-on-the-network). |
 | `--open` | Open the page in the default browser (the first URL printed). Off by default. |
@@ -77,53 +77,111 @@ On start the URL goes to stdout. With `--host 0.0.0.0` or `::`, stdout gets one 
 | Code | When |
 | --- | --- |
 | `0` | The server started (and later stopped on SIGINT or SIGTERM), or `-h` / `--help` printed the usage. |
-| `1` | The server could not start: invalid JSON, a graph the schema refuses, a missing path, a folder without exactly one `.json` file, a `--port` that is in use, or a `--host` that cannot be bound. The message is printed to stderr as `depgraph-view: <message>`. |
+| `1` | The server could not start: a plan file that is not YAML or that the rules refuse, a missing path, a folder with no plan file (or with several `.yaml` files and none named after the folder), an old JSON graph file (see [From graph.json](#from-graphjson)), a `--port` that is in use, or a `--host` that cannot be bound. The message is printed to stderr as `depgraph-view: <message>`. |
 | `2` | Usage error: no path, two paths, an unknown option, a bad `--port` value or a `--host` without a value. The usage is printed to stderr. |
 
-## The `graph.json` contract
+## The plan file
 
-The JSON file is an index. Each node points at a markdown file and, optionally, a folder of attached files. Paths are relative to the JSON file's folder (the root).
+The plan is one YAML file. It names the plan and lists each step by id, with the steps it needs. A step's title, status and text live in its own markdown file. Paths are relative to the YAML file's folder (the root).
 
-```json
-{
-  "name": "Spring garden",
-  "nodes": [
-    {
-      "id": "plant-tomatoes",
-      "md": "nodes/plant-tomatoes/plant-tomatoes.md",
-      "dir": "nodes/plant-tomatoes.context",
-      "depends_on": ["till-the-beds"]
-    },
-    {
-      "id": "till-the-beds",
-      "md": "nodes/till-the-beds/till-the-beds.md"
-    }
-  ]
-}
+A plan folder in the default layout:
+
+```
+garden/
+  garden.yaml
+  nodes/
+    dig-beds.context/
+      dig-beds.md
+    sow-peas.context/
+      sow-peas.md
+      row-plan.png
+    ...
 ```
 
-`nodes/plant-tomatoes/plant-tomatoes.md`:
+`garden/garden.yaml`:
+
+```yaml
+# Spring garden — the order things must happen in
+name: Spring garden
+nodes:
+  dig-beds: {}
+  buy-compost: {}
+  spread-compost: {needs: [dig-beds, buy-compost]}
+  sow-peas: {needs: [spread-compost]}
+  sow-beans: {needs: [spread-compost]}
+  build-trellis: {needs: [dig-beds]}
+  train-peas: {needs: [sow-peas, build-trellis]}
+  water-rota: {needs: [sow-peas, sow-beans]}
+  plant-tomatoes:
+    needs: [spread-compost]
+    md: notes/tomatoes.md     # this step's md lives elsewhere
+    dir: notes/tomato-photos
+  harvest: {needs: [train-peas, water-rota, plant-tomatoes]}
+```
+
+`nodes/sow-peas.context/sow-peas.md` (the default md for `sow-peas`):
 
 ```markdown
 ---
-title: Plant the tomatoes
+title: Sow the peas
 status: todo
-priority: high
-due: 2026-05-10
 tags: [vegetables]
 ---
-Six seedlings along the south fence, 60 cm apart. See ![the bed plan](bed-plan.png).
+Two rows along the trellis, 5 cm apart.
 ```
 
-### The JSON file
+A step with a priority, a due date and a hold needs nothing more in the YAML. In another plan, the line
 
-- `name` (string) is the page title. `nodes` is an array.
-- A node that is not an object, an `md` or `dir` that is not a string, or a `depends_on` that is not an array of strings rejects the file.
-- `id` matches `^[a-z0-9][a-z0-9-]*$` and is unique. A bad or duplicate id rejects the file.
-- `md` (string) is required. `dir` (string) is optional. Both are relative to the root.
-- A path that leaves the root, before or after resolving symlinks, drops that node with a warning.
-- A missing `md` file drops the node with a warning. A missing `dir` keeps the node with no files and a warning.
-- `depends_on` (array of ids) lives only in the JSON. An id that is not in the graph is dropped with a warning. A node that depends on itself, or a cycle, rejects the file.
+```yaml
+  order-raised-bed-kit: {needs: [measure-plot]}
+```
+
+goes with `nodes/order-raised-bed-kit.context/order-raised-bed-kit.md`:
+
+```markdown
+---
+title: Order the raised-bed kit
+description: Cedar kit for the two south beds.
+status: todo
+priority: high
+due: 2027-03-15
+hold: Which size fits depends on the plot measurements.
+tags: [beds, shopping]
+---
+```
+
+### Keys
+
+The top level is a mapping:
+
+| Key | Rule |
+| --- | --- |
+| `name` | String, required. The page title. |
+| `nodes` | Mapping from id to step, required. `{}` is an empty plan. |
+
+Any other top-level key is ignored with a warning.
+
+Each step's value is a mapping, or empty (`dig-beds:` with nothing after it means `{}`):
+
+| Key | Rule |
+| --- | --- |
+| `needs` | List of ids. Absent, empty (`needs:`) or `[]` means none. A single id without brackets (`needs: dig-beds`) rejects the file: write `needs: [dig-beds]`. |
+| `md` | String, a path relative to the root. Defaults to `nodes/<id>.context/<id>.md`. |
+| `dir` | String, a path relative to the root: the step's folder. Defaults to `nodes/<id>.context`. With `md` given and no `dir`, the folder is the md file's folder. |
+| `title`, `description`, `status`, `tags`, `due`, `priority`, `hold` | Optional. Used when the md file's frontmatter does not set them; the frontmatter wins. |
+
+Any other key on a step is ignored with the warning `node "<id>": unknown key "<key>" ignored` (it catches typos such as `need:`).
+
+### The rules
+
+- An id matches `^[a-z0-9][a-z0-9-]*$`. A bad id, or the same id twice, rejects the file.
+- Ids are strings. YAML reads an unquoted `2026` as a number, so quote such an id, as a key and in `needs`: `"2026": {}`, `needs: ["2026"]`. An unquoted one rejects the file.
+- These reject the file too: text that is not YAML, a top level that is not a mapping, a `name` that is not a string, `nodes` that is not a mapping, a step whose value is not a mapping or empty, `needs` that is not a list of ids, and an `md` or `dir` that is not a string.
+- A path that leaves the root, before or after resolving symlinks, drops that step with a warning.
+- A step whose default md file is missing is kept, with the warning `no md file`: its fields come from the plan file or take their defaults (the title is the id). While watching, the viewer reads the file once it appears. A step whose `md` is given but missing is dropped, with the warning `md not found`.
+- A `dir` that does not exist keeps the step with no files and a warning.
+- An id in `needs` that is not in the plan is dropped with a warning. A step that needs itself, or a cycle, rejects the file.
+- Only the YAML makes a step: a folder under `nodes/` that the YAML does not list is not shown.
 
 ### The md file
 
@@ -135,11 +193,11 @@ Six seedlings along the south fence, 60 cm apart. See ![the bed plan](bed-plan.p
   - `tags`: array of strings.
   - `due`: a real date, `YYYY-MM-DD`.
   - `hold`: 1–200 characters saying why the step is not broken down yet.
-- The same seven keys may also sit on the JSON node. The frontmatter wins over them. Other keys are ignored.
-- A frontmatter key set to null (`title:` with no value) counts as absent. Its default applies, even over a value on the JSON node.
+- The same seven keys may also sit on the step in the plan file. The frontmatter wins over them. Other keys are ignored.
+- A frontmatter key set to null (`title:` with no value) counts as absent. Its default applies, even over a value in the plan file.
 - A number or boolean `title` or `description` is read as text.
 - These reject the file: a field with the wrong type or value, an unclosed frontmatter block, frontmatter that is not a mapping, a duplicate YAML key, or YAML that cannot be read.
-- The md body below the frontmatter is the text shown in the step's panel. Relative links and images in it resolve against the step's folder: `dir` when given, else the md file's folder.
+- The md body below the frontmatter is the text shown in the step's panel. Relative links and images in it resolve against the step's folder (see `dir` above).
 
 ### The step's folder
 
@@ -150,11 +208,21 @@ The step's folder is listed as its files:
 - entries whose realpath leaves the folder skipped;
 - at most 500, with a warning past that.
 
-Give each step its own folder (as in the example) if you want its file list to hold only that step's files.
+The default layout gives each step its own folder, so its file list holds only that step's files. Steps that share a `dir` share its list.
 
 ### Errors
 
 At startup a rejected file ends the CLI with exit code 1. While watching, a change that makes the file invalid sends an `error` to the page. The page shows it in a dismissible banner, and the last good graph stays served.
+
+### From graph.json
+
+Version 0.1.0 read a JSON graph file. A `.json` path, or a folder with a `.json` file and no `.yaml`, now ends the CLI with exit code 1 and asks for the YAML. To rewrite one:
+
+- Rename `depends_on` to `needs`.
+- Turn the `nodes` list into a mapping keyed by id: `{"id": "sow-peas", "depends_on": ["spread-compost"]}` becomes `sow-peas: {needs: [spread-compost]}`.
+- Drop `md` and `dir` where they equal the defaults (`nodes/<id>.context/<id>.md`, `nodes/<id>.context`). Keep them where they differ.
+- Quote ids that YAML would read as something other than a string, such as `"2026"`.
+- Name the file after its folder (`garden/garden.yaml`), or keep it the only `.yaml` file there.
 
 ## What the viewer shows
 
@@ -242,7 +310,8 @@ import 'depgraph-view/viewer.css'
 - `depgraph-view/engine`: the layout, schema and label modules as namespaces, for example `schema` (`validatePlan`, `ID_RE`, the `Plan` types), `layered`, `grouping`, `graphData`, `camera`, `frame`. The label modules build DOM and need a browser `document`.
 - `depgraph-view/server` (Node only):
   - `startServer({ path, port?, host?, watch?, distDir? })` resolves to `{ url, urls, port, warnings, close() }`. `host` defaults to `127.0.0.1`; `urls` lists every URL it is reachable at and `url` is the first.
-  - `loadGraph(rootDir, json)` is the loader behind the contract above. It reads the md files and folders under `rootDir` and returns `{ plan, resources, bodies, warnings, ... }`.
+  - `loadGraph(rootDir, yaml)` is the loader behind [The plan file](#the-plan-file): `yaml` is the plan file's text. It reads the md files and folders under `rootDir` and returns `{ plan, resources, bodies, warnings, ... }`.
+  - `parseGraphYaml(text)` applies the plan file's shape rules alone and reads no files. It returns `{ name, entries, warnings }`, each entry `{ id, needs, md?, dir?, common }` in file order.
   - `GraphError` and `PortInUseError` are the errors they throw.
 
 ## Development

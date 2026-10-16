@@ -1,7 +1,7 @@
 {
   "name": "depgraph-view",
-  "version": "0.1.0",
-  "description": "A read-only 3D viewer for dependency graphs: point it at a graph.json and browse the plan on localhost, with live reload.",
+  "version": "0.2.0",
+  "description": "A read-only 3D viewer for dependency graphs: point it at a plan YAML file and browse the plan on localhost, with live reload.",
   "keywords": [
     "dependency-graph",
     "graph",
