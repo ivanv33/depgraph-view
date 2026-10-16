@@ -23,15 +23,17 @@ usage: depgraph-view <path> [--port N] [--host ADDR] [--open] [--no-watch]
   -h, --help   show this help
 ```
 
-The first run downloads the viewer from GitHub and builds it, which takes about a minute; later runs reuse npx's cache and start in a second or two. The viewer needs Node 20.19 or newer; if `node --version` is older, tell the user rather than trying anyway.
+The first run downloads the viewer from GitHub and builds it, which can take a minute or more: wait until it prints a URL or exits. Later runs reuse npx's cache and start in a second or two. The viewer needs Node 20.19 or newer; if `node --version` is older, tell the user rather than trying anyway.
 
 ## What it prints
 
-- stdout: one URL per line, such as `http://127.0.0.1:4311/`. The first is the one to give the user (and the one `--open` opens). More than one appears only with `--host 0.0.0.0` or `--host ::` on a machine with several network addresses.
+- stdout: one URL per line, such as `http://127.0.0.1:4311/`. The first is the one to give the user (and the one `--open` opens). More than one appears only with `--host 0.0.0.0` or `--host ::` on a machine with several IPv4 network addresses.
 - stderr: one `warning: <message>` line per load warning, printed once at start. Each is in the warnings table of `references/format.md`.
 - stderr, when the plan is refused or the server cannot start: one line `depgraph-view: <message>`, then exit `1`. The message is in the refusals table of `references/format.md`.
 
 Run it in the background so the session stays free, and read the URL from its output. It serves until stopped.
+
+Where the output goes: use the session tool's own background-run feature when it has one; it keeps stdout, stderr and the stop control. Otherwise redirect stdout and stderr, and save `$!` (the npx pid), to files in one scratch place of the session's own: its scratch directory if it has one, else a fresh `mktemp -d`. Never put them inside the plan folder, and never in fixed-name files under `/tmp`. Name that place to the user once, and delete nothing in it.
 
 ## The check run
 
@@ -50,19 +52,19 @@ A reload prints nothing to the terminal. What it found shows on the page:
 - the warnings list, collapsed in the page's bottom-left corner as `N warnings`, carries the same messages as the `warning:` lines;
 - a red banner at the top is a reload that was refused: the page keeps showing the last plan that loaded, and the banner's text is the refusal message.
 
-To read the same from the session while the viewer runs on port N:
+To read the same from the session while the viewer runs on port N (here and below, use the host and port from the printed URL; `127.0.0.1` does not reach a viewer bound to one specific address such as `--host 192.168.1.20`):
 
 ```sh
 curl -s --max-time 5 http://127.0.0.1:N/api/graph
 ```
 
-returns JSON whose `warnings` array is the current list and whose `plan.name` is the plan's `name`. A refused reload does not change it (it still holds the last plan that loaded). To see a refusal:
+returns JSON whose `warnings` array is the current list, whose `plan.name` is the plan's `name` and whose `generatedAt` is when that plan loaded. A reload runs 150 ms after the last change, and a refused reload does not change the JSON (it still holds the last plan that loaded, warnings and all). So after an edit, wait until `generatedAt` changes before trusting `warnings`, and check `/events` for a refusal. To see a refusal:
 
 ```sh
 curl -s --max-time 2 http://127.0.0.1:N/events
 ```
 
-prints an `event: error` line with the refusal message when the last reload was refused, and nothing after `retry: 1000` when it was not. This request stays open, so `--max-time` ends it; the timeout is expected.
+prints an `event: error` line followed by `data: {"message":"<refusal>"}` when the last reload was refused, and nothing after `retry: 1000` when it was not. This request stays open, so `--max-time` ends it; the timeout is expected.
 
 ## Reusing a viewer
 
@@ -87,7 +89,7 @@ By default the viewer binds `127.0.0.1`, so only this machine can open it, and i
 
 Use `--host` only when the user asks to open the plan from another device:
 
-- `--host 0.0.0.0` (or `--host ::`) serves every network interface and prints one URL per network address of the machine. A specific address (`--host 192.168.1.20`) binds only that one and prints that URL.
+- `--host 0.0.0.0` (or `--host ::`) serves every network interface and prints one URL per IPv4 network address of the machine (not counting loopback), or `http://127.0.0.1:N/` when there is none, also for `--host ::`. A specific address (`--host 192.168.1.20`) binds only that one and prints that URL.
 - Any host other than `127.0.0.1`, `localhost`, `::1` or `[::1]` makes the viewer print `warning: serving on <host>; ...` to stderr. For `--host 0.0.0.0` it reads:
 
   ```text
@@ -121,5 +123,5 @@ Stop only a viewer this session started: when the user says they are done, or be
    lsof -ti tcp:N -sTCP:LISTEN
    ```
 
-   `000` from curl and no output from `lsof` (no listener on the port) mean the port is free. Without `-sTCP:LISTEN`, `lsof` also lists clients, such as a browser tab still connected to the page.
-3. If a listener remains, `lsof -ti tcp:N -sTCP:LISTEN` prints its process id. Check it is the viewer this session started (`ps -o command= -p <pid>` shows `depgraph-view` and this plan's path, on the port from the URL this session read), and only then `kill <pid>` and repeat step 2. If it is anything else, leave it and tell the user what is on the port.
+   `000` from curl and no output from `lsof` (no listener on the port) mean the port is free. Without `-sTCP:LISTEN`, `lsof` also lists clients, such as a browser tab still connected to the page. Where `lsof` is missing, use `ss -ltnp 'sport = :N'` (no line after the header means no listener), or, if neither exists, take curl's `000` alone.
+3. If a listener remains, `lsof -ti tcp:N -sTCP:LISTEN` (or the `pid=` field of `ss -ltnp`) prints its process id. Check it is the viewer this session started (`ps -o command= -p <pid>` shows `depgraph-view` and this plan's path as it was typed, often relative such as `play`, on the port from the URL this session read), and only then `kill <pid>` and repeat step 2. If it is anything else, leave it and tell the user what is on the port.

@@ -131,7 +131,7 @@ A YAML syntax error in the plan file is prefixed with the file's name (`kitchen.
 | `<file>: cannot be read (<code>)` | The plan file exists but cannot be read (`<code>` is the system's error code, such as `EACCES`). | Tell the user; the file's permissions are theirs to fix. |
 | `port N is in use` | `--port N` was given and that port is taken. | See `viewer.md`. |
 
-Any other message after `<file>: ` or `node "<id>": ` is the YAML parser's own, about invalid YAML in the plan file or that card; most name the line and column. Read that spot: quoting the value fixes most. A system error code after `depgraph-view: `, such as `EACCES: permission denied, open '<path>'`, means a file the viewer cannot read: tell the user.
+Any other message after `<file>: ` or `node "<id>": ` is the YAML parser's own, about invalid YAML in the plan file or that card; most name the line and column. Read that spot: quoting the value fixes most. A system error code after `depgraph-view: `, such as `EACCES: permission denied, open '<path>'`, means a file the viewer cannot read or, with `--host`, an address this machine cannot bind (such as `listen EADDRNOTAVAIL: ...` or `getaddrinfo ENOTFOUND ...`; see `viewer.md`, Exit codes): tell the user.
 
 ## Warnings
 

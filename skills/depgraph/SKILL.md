@@ -114,11 +114,11 @@ Every operation starts the same way: find the plan file, read the YAML and the c
 
 Finding the plan file: a path ending `.yaml` or `.yml` is the plan; a folder's plan is `<folder>.yaml`, else its only top-level `.yaml` file. Dot-files do not count. The exact rules are in `references/format.md`.
 
-Making an id from a title: lower-case it, turn every run of characters outside `a-z0-9` into one `-`, trim `-` from the ends, and keep it to a few words (`Sew the costumes` becomes `sew-costumes`; dropping filler words is fine). If the id is taken, append `-2`, `-3`. Avoid ids that are only digits; if the user insists, quote them everywhere (`"2027": {}`, `needs: ["2027"]`), because unquoted they read as numbers and the plan is refused.
+Making an id from a title: lower-case it, turn every run of characters outside `a-z0-9` into one `-`, trim `-` from the ends, and keep it to a few words (`Sew the costumes` becomes `sew-costumes`; dropping filler words is fine). If the id is taken, append `-2`, `-3`. Avoid ids YAML reads as something other than text: only digits (`2027`), `true`, `false`, `null`, or a number such as `1e3` or `0x10`. Append a word instead (`true-2`); if the user insists, quote them everywhere (`"2027": {}`, `needs: ["2027"]`), because unquoted the plan is refused.
 
 ### Start a plan
 
-1. Ask where. The default is a new folder in the current directory, named from the plan's name the same way as ids.
+1. If the user did not say where, propose the default and confirm: a new folder in the current directory, named from the plan's name the same way as ids.
 2. If the folder already holds a `.yaml` plan file, do not start a second one there; offer to work on that plan instead.
 3. Create `<folder>/<folder>.yaml` with `name:` and `nodes:`. Quote the name if it reads as a number (`name: "2027"`).
 4. If the user gave steps, add each one as in "Add a step". Create `nodes/` only through the cards it holds.
@@ -151,9 +151,9 @@ Write the step and its card together: a step without a card loads with the warni
 
 From `old` to `new`:
 
-1. Check `new` is a valid id and unused.
+1. Check `new` is a valid id, unused in the YAML, and that `nodes/new.context/` does not exist on disk (if it does, `mv` would nest the old folder inside it; ask the user).
 2. In the YAML, rename the key and replace `old` in every `needs` list. Replace whole items only, never substrings: renaming `set` must not touch `build-set`.
-3. When the step uses the default layout (no `md` and no `dir` keys), move `nodes/old.context/` to `nodes/new.context/` and, inside it, `old.md` to `new.md`. When the step names `md` or `dir`, leave those files where they are; the paths do not contain the id.
+3. When the step uses the default layout (no `md` and no `dir` keys), move `nodes/old.context/` to `nodes/new.context/` and, inside it, `old.md` to `new.md`. When the step names `md` or `dir`, leave those files where they are; the YAML paths keep pointing at them.
 4. Search the other cards' bodies for relative links into `../old.context/` and tell the user about each one; fix them if they ask.
 5. Tell the user that viewer links ending `?step=old` stop selecting the step.
 
@@ -192,7 +192,7 @@ First, a reading pass while you edit, because it is cheap and catches mistakes b
 - every step has its card at the default path (or at its given `md`);
 - every card's frontmatter has only the seven keys, with valid values.
 
-Then the authoritative check: the viewer's own loader, run once without watching and on a port the OS picks. Run it in the background, from the folder that contains `play/`, or pass the plan folder's path. In both commands here, replace `play` with your own plan folder or `.yaml` path:
+Then the authoritative check: the viewer's own loader, run once without watching and on a port the OS picks. Run it in the background, with its output in your own scratch place as `references/viewer.md` says under "What it prints", from the folder that contains `play/`, or pass the plan folder's path. In both commands here, replace `play` with your own plan folder or `.yaml` path:
 
 ```sh
 npx --yes github:ivanv33/depgraph-view#v0.2.1 play --no-watch --port 0
@@ -202,9 +202,9 @@ npx --yes github:ivanv33/depgraph-view#v0.2.1 play --no-watch --port 0
 - If it prints a URL, the plan loaded. Any `warning:` lines on stderr are still to fix; the same table has each one.
 - Then stop the process you started with SIGTERM (`kill <pid>`) and confirm the port is free, as `references/viewer.md` says under "Stopping".
 
-`--port 0` avoids every port clash, and `--no-watch` keeps it from following the files. The first run downloads and builds the viewer, which takes about a minute; later runs start in a second or two. `--yes` stops npx from waiting on an install prompt in a non-interactive shell.
+`--port 0` avoids every port clash, and `--no-watch` keeps it from following the files. The first run downloads and builds the viewer, which can take a minute or more: wait until it prints a URL or exits. Later runs start in a second or two. `--yes` stops npx from waiting on an install prompt in a non-interactive shell.
 
-When the user asked to see the plan, the check and the showing are one run: start the viewer as below; if it exits 1, fix and start again; if it prints warnings, fix them while it runs; it reloads by itself and prints nothing more, so confirm through `warnings` in `/api/graph` (see `references/viewer.md`, "Live reload").
+When the user asked to see the plan, the check and the showing are one run: start the viewer as below; if it exits 1, fix and start again; if it prints warnings, fix them while it runs; it reloads by itself and prints nothing more, so confirm in `/api/graph` that `generatedAt` changed and `warnings` is empty, and that `/events` shows no `event: error` (see `references/viewer.md`, "Live reload"); when in doubt, run the check run again.
 
 ## Showing the plan
 
@@ -231,7 +231,7 @@ Exit codes, stopping and confirming the port is free, and the network details ar
 - Never write an id outside `^[a-z0-9][a-z0-9-]*$`, and never leave a numeric-looking id or needs item unquoted: the viewer refuses both.
 - Never write `needs` without brackets: `needs: book-hall` is refused, `needs: [book-hall]` loads.
 - Never delete files: a deleted step's folder moves to `deleted/<id>.context/` at the plan root, so nothing is lost and the id can be reused.
-- Never edit, create or move anything outside the plan folder: the user pointed you at that folder and nothing else.
+- Never edit, create or move anything outside the plan folder, except the viewer's output files in your own scratch place (see `references/viewer.md`, "What it prints") and npx's own cache: the user pointed you at that folder and nothing else.
 - Never invent a due date, priority, hold or description: leave out what the user did not give.
 - Never break a cycle by picking a link to drop: ask, because only the user knows which link is wrong.
 - Never use `--host` unless the user asked for network access, and never stop a process you did not start: one exposes the plan, the other may be someone else's work.
