@@ -204,7 +204,7 @@ npx --yes github:ivanv33/depgraph-view#v0.2.1 play --no-watch --port 0
 
 `--port 0` avoids every port clash, and `--no-watch` keeps it from following the files. The first run downloads and builds the viewer, which takes about a minute; later runs start in a second or two. `--yes` stops npx from waiting on an install prompt in a non-interactive shell.
 
-When the user asked to see the plan, the check and the showing are one run: start the viewer as below; if it exits 1, fix and start again; if it prints warnings, fix them while it runs (it reloads by itself).
+When the user asked to see the plan, the check and the showing are one run: start the viewer as below; if it exits 1, fix and start again; if it prints warnings, fix them while it runs; it reloads by itself and prints nothing more, so confirm through `warnings` in `/api/graph` (see `references/viewer.md`, "Live reload").
 
 ## Showing the plan
 

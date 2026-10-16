@@ -118,8 +118,8 @@ Stop only a viewer this session started: when the user says they are done, or be
    ```
 
    ```sh
-   lsof -ti tcp:N
+   lsof -ti tcp:N -sTCP:LISTEN
    ```
 
-   `000` from curl and no output from `lsof` mean the port is free.
-3. If something still listens, `lsof -ti tcp:N` prints its process id. Check it is the viewer this session started (`ps -o command= -p <pid>` shows `depgraph-view` and this plan's path, on the port from the URL this session read), and only then `kill <pid>` and repeat step 2. If it is anything else, leave it and tell the user what is on the port.
+   `000` from curl and no output from `lsof` (no listener on the port) mean the port is free. Without `-sTCP:LISTEN`, `lsof` also lists clients, such as a browser tab still connected to the page.
+3. If a listener remains, `lsof -ti tcp:N -sTCP:LISTEN` prints its process id. Check it is the viewer this session started (`ps -o command= -p <pid>` shows `depgraph-view` and this plan's path, on the port from the URL this session read), and only then `kill <pid>` and repeat step 2. If it is anything else, leave it and tell the user what is on the port.
