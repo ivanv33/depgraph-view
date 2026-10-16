@@ -1,5 +1,5 @@
 import { watch } from 'chokidar'
-import { realpathSync, statSync } from 'node:fs'
+import { realpathSync } from 'node:fs'
 import path from 'node:path'
 import { GraphError, loadGraphFile, type LoadResult } from './loader.js'
 
@@ -58,13 +58,11 @@ export interface WatchedSource extends GraphSource {
 
 /**
  * The plan file, every node's md file, every node folder (chokidar watches a folder recursively) and the
- * `nodes/` folder beside the plan when there is one, so a default md that appears later is read.
+ * `nodes/` folder beside the plan, so a default md that appears later is read. `nodes/` is watched even
+ * when it does not exist yet: chokidar watches a missing path until it appears.
  */
 function watchList(planPath: string, result: LoadResult): Set<string> {
-  const list = new Set([planPath, ...Object.values(result.mdFiles), ...Object.values(result.folders)])
-  const nodesDir = path.join(path.dirname(planPath), 'nodes')
-  if (statSync(nodesDir, { throwIfNoEntry: false })?.isDirectory()) list.add(nodesDir)
-  return list
+  return new Set([planPath, ...Object.values(result.mdFiles), ...Object.values(result.folders), path.join(path.dirname(planPath), 'nodes')])
 }
 
 /**
@@ -87,6 +85,10 @@ export function watchedSource(planPath: string, debounceMs = 150): WatchedSource
 
   const rootDir = path.dirname(path.resolve(planPath))
   const roots = [rootDir, realpathSync(rootDir)]
+  // `nodes/` joins the watch on `ready`: chokidar 5.0 counts a missing path in the first watch list as
+  // ready twice, so `ready` would fire before the other paths finish their initial scan.
+  const nodesDir = path.join(path.dirname(planPath), 'nodes')
+  watched.delete(nodesDir)
   const watcher = watch([...watched], { ignoreInitial: true, followSymlinks: false, ignored: (p: string) => skipped(roots, p) })
   let live = false
 
@@ -117,6 +119,8 @@ export function watchedSource(planPath: string, debounceMs = 150): WatchedSource
   // rejects when chokidar fails first, so a caller awaiting it cannot hang.
   const ready = new Promise<void>((resolve, reject) => {
     watcher.once('ready', () => {
+      watcher.add(nodesDir)
+      watched.add(nodesDir)
       reload(false)
       live = true
       resolve()

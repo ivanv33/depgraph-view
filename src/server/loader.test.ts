@@ -137,6 +137,11 @@ describe('loadGraph', () => {
     expect(r.plan.nodes).toEqual([])
     expect(r.warnings).toEqual(['node "a": md not found'])
   })
+  it('dedupes and sorts needs', () => {
+    const r = loadGraph(makeFolder({ 'x.txt': '' }), 'name: G\nnodes:\n  a: {needs: [b, b]}\n  b: {}\n  c: {}\n  d: {needs: [c, b]}\n')
+    expect(r.plan.nodes.find(n => n.id === 'a')?.depends_on).toEqual(['b'])
+    expect(r.plan.nodes.find(n => n.id === 'd')?.depends_on).toEqual(['b', 'c'])
+  })
   it('sorts nodes by id whatever the file order', () => {
     const r = loadGraph(makeFolder({ 'x.txt': '' }), 'name: G\nnodes:\n  c: {}\n  a: {}\n  b: {needs: [a]}\n')
     expect(r.plan.nodes.map(n => n.id)).toEqual(['a', 'b', 'c'])
@@ -187,14 +192,29 @@ describe('resolveGraphPath', () => {
     expect(resolveGraphPath(both)).toBe(join(both, 'graph.yaml'))
   })
   it('a folder with only JSON, or a .json path, is refused with the README pointer', () => {
-    const old = makeFolder({ 'graph.json': '{}' })
+    const old = makeFolder({ 'graph.json': '{"name": "G", "nodes": []}' })
     expect(() => resolveGraphPath(old)).toThrow(new GraphError(json('graph')))
     expect(() => resolveGraphPath(join(old, 'graph.json'))).toThrow(new GraphError(json('graph')))
+  })
+  it('blames a JSON file only when it is <basename>.json or holds a nodes list', () => {
+    const pkg = makeFolder({ 'package.json': '{"name": "x"}' })
+    expect(() => resolveGraphPath(pkg)).toThrow(/expected a \.yaml plan file at the top of the folder, found none$/)
+    const other = makeFolder({ 'package.json': '{"name": "x"}', 'old.json': '{"nodes":[]}', 'broken.json': '{' })
+    expect(() => resolveGraphPath(other)).toThrow(new GraphError(json('old')))
+    const named = makeFolder({ 'garden/garden.json': 'not json', 'garden/a.json': '{"nodes":[]}' })
+    expect(() => resolveGraphPath(join(named, 'garden'))).toThrow(new GraphError(json('garden')))
+    const hidden = makeFolder({ '.old.json': '{"nodes":[]}' })
+    expect(() => resolveGraphPath(hidden)).toThrow(/found none$/)
+  })
+  it('does not count dot-files as the one top-level .yaml', () => {
+    const repo = makeFolder({ '.pre-commit-config.yaml': '', 'garden.yaml': '' })
+    expect(resolveGraphPath(repo)).toBe(join(repo, 'garden.yaml'))
+    expect(() => resolveGraphPath(makeFolder({ '.pre-commit-config.yaml': '' }))).toThrow(/found none$/)
   })
   it('.yml only when named; a folder of .yml finds none', () => {
     const yml = makeFolder({ 'plan.yml': '' })
     expect(resolveGraphPath(join(yml, 'plan.yml'))).toBe(join(yml, 'plan.yml'))
-    expect(() => resolveGraphPath(yml)).toThrow(/expected a \.yaml plan file at the top of the folder, found none$/)
+    expect(() => resolveGraphPath(yml)).toThrow(new GraphError(`${yml}: expected a .yaml plan file at the top of the folder, found none; plan.yml found: name the file explicitly or rename it to .yaml`))
     expect(() => resolveGraphPath(join(makeFolder({ 'a.txt': '' }), 'a.txt'))).toThrow(/^a\.txt: not a plan file \(expected \.yaml or \.yml\)$/)
   })
 })
@@ -219,7 +239,7 @@ describe('loadGraphFile', () => {
     const bad = makeFolder({ 'plan.yaml': 'name: [unclosed\n' })
     expect(() => loadGraphFile(join(bad, 'plan.yaml'))).toThrow(/^plan\.yaml: /)
     const shape = makeFolder({ 'plan.yaml': 'name: 3\nnodes: {}\n' })
-    expect(() => loadGraphFile(join(shape, 'plan.yaml'))).toThrow(/^name must be a string$/)
+    expect(() => loadGraphFile(join(shape, 'plan.yaml'))).toThrow(/^name must be a string: quote it as "3"$/)
   })
   it('names an unreadable file by its base name and error code only', () => {
     const root = makeFolder({})

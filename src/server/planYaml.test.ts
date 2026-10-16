@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { GraphError, parseGraphYaml } from './planYaml.js'
 
 const err = (text: string) => { try { parseGraphYaml(text); return null } catch (e) { return e as GraphError } }
@@ -17,10 +17,25 @@ describe('parseGraphYaml', () => {
   })
   it('needs: with no value means no needs', () => expect(parseGraphYaml('name: G\nnodes:\n  a: {needs: }\n').entries[0].needs).toEqual([]))
   it('nodes: {} is an empty plan', () => expect(parseGraphYaml('name: G\nnodes: {}\n').entries).toEqual([]))
+  it('nodes: with no value is an empty plan', () => expect(parseGraphYaml('name: G\nnodes:\n').entries).toEqual([]))
   it('a quoted numeric id is a string', () => expect(parseGraphYaml('name: G\nnodes:\n  "2026": {}\n').entries[0].id).toBe('2026'))
   it('an unquoted id YAML reads as a non-string rejects with a hint to quote it', () => {
     for (const k of ['2026', '1e3', 'true', 'null'])
       expect(err(`name: G\nnodes:\n  ${k}: {}\n`)?.message).toBe(`node id ${k} is not a string: quote it as "${k}"`)
+  })
+  it('an id that would not be a valid id even quoted, or is not a scalar, gets the plain wording', () => {
+    const warn = vi.spyOn(process, 'emitWarning')
+    try {
+      for (const k of ['1.5: {}', '? [a]\n  : {}', '?\n  : {}'])
+        expect(err(`name: G\nnodes:\n  ${k}\n`)?.message, k).toBe('node id must be a string such as dig-beds')
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+  it('a non-string name gets the hint to quote it', () => {
+    expect(err('name: 2026\nnodes: {}\n')?.message).toBe('name must be a string: quote it as "2026"')
+    expect(err('name: [a]\nnodes: {}\n')?.message).toBe('name must be a string')
   })
   it('a needs item YAML reads as a non-string rejects with the same hint', () => {
     expect(err('name: G\nnodes:\n  a: {needs: [2026]}\n')?.message).toBe('node "a": needs item 2026 is not a string: quote it as "2026"')

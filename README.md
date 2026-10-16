@@ -2,7 +2,7 @@
 
 A read-only 3D viewer for dependency graphs. Point it at a plan YAML file that lists the steps and what each one needs; each step's text is a markdown file. It serves the graph on `127.0.0.1` (or your network, with `--host`) as a force-directed, layered 3D view. You can pan, zoom, group branches, search steps by title or id, and open a step to read its markdown, its dependencies and the files in its folder. It follows the files on disk and reloads the page when they change. Nothing is ever written: there is no editing, no upload and no write route.
 
-<img src="https://raw.githubusercontent.com/ivanv33/depgraph-view/main/docs/viewer.png" width="830" alt="The viewer showing an eight-step garden plan as a layered graph, with the step &quot;Spread compost on the beds&quot; selected and its panel open on the right: the step's text and image, the steps it depends on and is needed by, and its two files">
+<img src="https://raw.githubusercontent.com/ivanv33/depgraph-view/main/docs/viewer.png" width="830" alt="The viewer showing an eight-step garden plan (a smaller one than the example below) as a layered graph, with the step &quot;Spread compost on the beds&quot; selected and its panel open on the right: the step's text and image, the steps it depends on and is needed by, and its two files">
 
 ## Quick start
 
@@ -63,7 +63,7 @@ depgraph-view <path> [--port N] [--host ADDR] [--open] [--no-watch]
 
 | Argument | Meaning |
 | --- | --- |
-| `<path>` | A plan YAML file (`.yaml` or `.yml`), or a folder holding `<folder>.yaml` or exactly one `.yaml` file. In a folder, a `.yml` file is not looked for: name it on the command line. |
+| `<path>` | A plan YAML file (`.yaml` or `.yml`), or a folder holding `<folder>.yaml` or exactly one `.yaml` file. Dot-files such as `.pre-commit-config.yaml` are not counted. In a folder, a `.yml` file is not looked for: name it on the command line. |
 | `--port N` | Serve on port `N` (0–65535; `0` lets the OS pick). A port that is taken is an error. Without `--port`, the first free port from `4310` upward. |
 | `--host ADDR` | Bind `ADDR`: an IPv4 or IPv6 address, or a host name. Defaults to `127.0.0.1`. `0.0.0.0` (or `::`) serves every network interface; see [Serving on the network](#serving-on-the-network). |
 | `--open` | Open the page in the default browser (the first URL printed). Off by default. |
@@ -96,6 +96,9 @@ garden/
       sow-peas.md
       row-plan.png
     ...
+  notes/
+    tomatoes.md         # plant-tomatoes names its md and dir (below)
+    tomato-photos/
 ```
 
 `garden/garden.yaml`:
@@ -157,7 +160,7 @@ The top level is a mapping:
 | Key | Rule |
 | --- | --- |
 | `name` | String, required. The page title. |
-| `nodes` | Mapping from id to step, required. `{}` is an empty plan. |
+| `nodes` | Mapping from id to step, required. `{}`, or `nodes:` with nothing after it, is an empty plan. |
 
 Any other top-level key is ignored with a warning.
 
@@ -165,7 +168,7 @@ Each step's value is a mapping, or empty (`dig-beds:` with nothing after it mean
 
 | Key | Rule |
 | --- | --- |
-| `needs` | List of ids. Absent, empty (`needs:`) or `[]` means none. A single id without brackets (`needs: dig-beds`) rejects the file: write `needs: [dig-beds]`. |
+| `needs` | List of ids. Absent, empty (`needs:`) or `[]` means none. An id listed twice counts once. A single id without brackets (`needs: dig-beds`) rejects the file: write `needs: [dig-beds]`. |
 | `md` | String, a path relative to the root. Defaults to `nodes/<id>.context/<id>.md`. |
 | `dir` | String, a path relative to the root: the step's folder. Defaults to `nodes/<id>.context`. With `md` given and no `dir`, the folder is the md file's folder. |
 | `title`, `description`, `status`, `tags`, `due`, `priority`, `hold` | Optional. Used when the md file's frontmatter does not set them; the frontmatter wins. |
@@ -176,9 +179,9 @@ Any other key on a step is ignored with the warning `node "<id>": unknown key "<
 
 - An id matches `^[a-z0-9][a-z0-9-]*$`. A bad id, or the same id twice, rejects the file.
 - Ids are strings. YAML reads an unquoted `2026` as a number, so quote such an id, as a key and in `needs`: `"2026": {}`, `needs: ["2026"]`. An unquoted one rejects the file.
-- These reject the file too: text that is not YAML, a top level that is not a mapping, a `name` that is not a string, `nodes` that is not a mapping, a step whose value is not a mapping or empty, `needs` that is not a list of ids, and an `md` or `dir` that is not a string.
+- These reject the file too: text that is not YAML, a top level that is not a mapping, a `name` that is not a string, `nodes` that is not a mapping, a step whose value is not a mapping or empty, `needs` that is not a list of strings, and an `md` or `dir` that is not a string.
 - A path that leaves the root, before or after resolving symlinks, drops that step with a warning.
-- A step whose default md file is missing is kept, with the warning `no md file`: its fields come from the plan file or take their defaults (the title is the id). While watching, the viewer reads the file once it appears. A step whose `md` is given but missing is dropped, with the warning `md not found`.
+- A step whose default md file is missing is kept, with the warning `no md file`: its fields come from the plan file or take their defaults (the title is the id). While watching, the viewer reads the file once it appears, even when `nodes/` itself is created after the viewer started. A step whose `md` is given but missing is dropped, with the warning `md not found`.
 - A `dir` that does not exist keeps the step with no files and a warning.
 - An id in `needs` that is not in the plan is dropped with a warning. A step that needs itself, or a cycle, rejects the file.
 - Only the YAML makes a step: a folder under `nodes/` that the YAML does not list is not shown.
@@ -216,7 +219,7 @@ At startup a rejected file ends the CLI with exit code 1. While watching, a chan
 
 ### From graph.json
 
-Version 0.1.0 read a JSON graph file. A `.json` path, or a folder with a `.json` file and no `.yaml`, now ends the CLI with exit code 1 and asks for the YAML. To rewrite one:
+Version 0.1.0 read a JSON graph file. A `.json` path, or a folder with no `.yaml` but with `<folder>.json` or a `.json` file holding a `nodes` list, now ends the CLI with exit code 1 and asks for the YAML. To rewrite one:
 
 - Rename `depends_on` to `needs`.
 - Turn the `nodes` list into a mapping keyed by id: `{"id": "sow-peas", "depends_on": ["spread-compost"]}` becomes `sow-peas: {needs: [spread-compost]}`.

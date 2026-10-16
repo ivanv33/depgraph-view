@@ -116,7 +116,7 @@ describe('hold', () => {
     // Validated on the collapsed form: 200 characters once collapsed is in range.
     expect(validatePlan({ name: 'p', nodes: [node('a', [], { hold: 'x'.repeat(100) + '\n\n\n' + 'y'.repeat(99) })] })).toEqual([])
   })
-  it('plans without hold serialize unchanged', () => {
+  it('normalizePlan leaves hold off a node that has none', () => {
     expect('hold' in normalizePlan({ name: 'p', nodes: [node('a')] }).nodes[0]).toBe(false)
   })
 })

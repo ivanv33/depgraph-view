@@ -86,7 +86,7 @@ export function loadGraph(rootDir: string, yaml: string): LoadResult {
       }
       out.mdFiles[id] = mdPath
     }
-    kept.push(nodeFromFile(id, { ...common, ...data }, needs))
+    kept.push(nodeFromFile(id, { ...common, ...data }, [...new Set(needs)].sort()))
     out.bodies[id] = body
     if (folder === null) {
       out.resources[id] = []
@@ -138,15 +138,29 @@ export function resolveGraphPath(p: string): string {
     throw new GraphError(`${base}: not a plan file (expected .yaml or .yml)`)
   }
   const isFile = (name: string) => statSync(path.join(abs, name), { throwIfNoEntry: false })?.isFile() === true
-  const names = readdirSync(abs).filter(isFile).sort()
+  // Dot-files (`.pre-commit-config.yaml`, ...) are never the plan.
+  const names = readdirSync(abs).filter(name => !name.startsWith('.') && isFile(name)).sort()
   const own = `${path.basename(abs)}.yaml`
   if (names.includes(own)) return path.join(abs, own)
   const found = names.filter(name => name.endsWith('.yaml'))
   if (found.length === 1) return path.join(abs, found[0])
   if (found.length > 1) throw new GraphError(`${p}: expected exactly one .yaml file at the top of the folder, found ${found.length}: ${found.join(', ')}`)
-  const json = names.find(name => name === `${path.basename(abs)}.json`) ?? names.find(name => name.endsWith('.json'))
+  const json = names.find(name => name === `${path.basename(abs)}.json`) ?? names.find(name => name.endsWith('.json') && isJsonGraph(path.join(abs, name)))
   if (json !== undefined) throw jsonRefusal(json)
-  throw new GraphError(`${p}: expected a .yaml plan file at the top of the folder, found none`)
+  const none = `${p}: expected a .yaml plan file at the top of the folder, found none`
+  const yml = names.filter(name => name.endsWith('.yml'))
+  if (yml.length) throw new GraphError(`${none}; ${yml.join(', ')} found: name the file explicitly or rename it to .yaml`)
+  throw new GraphError(none)
+}
+
+/** Whether the file at `file` holds an old JSON graph: an object with a `nodes` array. */
+function isJsonGraph(file: string): boolean {
+  try {
+    const data: unknown = JSON.parse(readFileSync(file, 'utf8'))
+    return typeof data === 'object' && data !== null && Array.isArray((data as { nodes?: unknown }).nodes)
+  } catch {
+    return false
+  }
 }
 
 /** Reads the plan YAML at `planPath` and loads it relative to its folder. Throws GraphError. */

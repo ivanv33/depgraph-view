@@ -221,6 +221,21 @@ describe('watchedSource', () => {
       await linked.close()
     }
   })
+  it('sends nothing for a symlink under nodes/ at start', async () => {
+    const fresh = makeFolder({ 'graph.yaml': planText('G', { b: {} }), 'nodes/b.context/b.md': '' })
+    symlinkSync(makeFolder({}), join(fresh, 'nodes/b.context/link-out'))
+    await pause(500) // past the OS reporting the symlink's own creation
+    const linked = watchedSource(join(fresh, 'graph.yaml'))
+    try {
+      const events: LiveEvent[] = []
+      linked.on(e => events.push(e))
+      await linked.ready()
+      await pause(400)
+      expect(events).toEqual([])
+    } finally {
+      await linked.close()
+    }
+  })
   it('a default md written after start reloads with its title', async () => {
     const fresh = makeFolder({ 'graph.yaml': planText('G', { a: {}, b: {} }), 'nodes/b.context/b.md': '' })
     const live = watchedSource(join(fresh, 'graph.yaml'))
@@ -232,6 +247,22 @@ describe('watchedSource', () => {
       writeFileSync(join(fresh, 'nodes/a.context/a.md'), '---\ntitle: Sow the peas\n---\n')
       expect(await next).toEqual({ type: 'reload', generatedAt: expect.any(String) })
       expect(live.current().result.plan.nodes.find(n => n.id === 'a')?.title).toBe('Sow the peas')
+    } finally {
+      await live.close()
+    }
+  })
+  it('a default md written after start reloads with its title when nodes/ did not exist at start', async () => {
+    const fresh = makeFolder({ 'graph.yaml': planText('G', { a: {} }) })
+    const live = watchedSource(join(fresh, 'graph.yaml'))
+    try {
+      await settle(live)
+      expect(live.current().result.warnings).toEqual(['node "a": no md file'])
+      const next = nextEvent(live)
+      mkdirSync(join(fresh, 'nodes/a.context'), { recursive: true })
+      writeFileSync(join(fresh, 'nodes/a.context/a.md'), '---\ntitle: Sow the peas\n---\n')
+      expect(await next).toEqual({ type: 'reload', generatedAt: expect.any(String) })
+      expect(live.current().result.plan.nodes[0].title).toBe('Sow the peas')
+      expect(live.current().result.warnings).toEqual([])
     } finally {
       await live.close()
     }

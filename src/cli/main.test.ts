@@ -71,7 +71,7 @@ describe('run', () => {
     writeFileSync(join(bad, 'graph.yaml'), 'name: 3\nnodes: {}\n')
     const invalid = capture()
     expect(await start([bad, '--port', '0'], invalid)).toEqual({ code: 1 })
-    expect(invalid.errLines).toEqual(['depgraph-view: name must be a string'])
+    expect(invalid.errLines).toEqual(['depgraph-view: name must be a string: quote it as "3"'])
     const io = capture()
     expect(await start([join(root, 'nope.yaml'), '--port', '0'], io)).toEqual({ code: 1 })
     expect(io.errLines).toHaveLength(1)
@@ -79,7 +79,7 @@ describe('run', () => {
     expect(io.outLines).toEqual([])
   })
   it('exits 1 with the README pointer for a folder holding only graph.json', async () => {
-    writeFileSync(join(bad, 'graph.json'), '{}')
+    writeFileSync(join(bad, 'graph.json'), '{"name": "G", "nodes": []}')
     const io = capture()
     expect(await start([bad, '--port', '0'], io)).toEqual({ code: 1 })
     expect(io.errLines).toEqual(['depgraph-view: graph.json: JSON graph files are no longer read; rewrite it as graph.yaml (see README "From graph.json")'])
