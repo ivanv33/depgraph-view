@@ -51,6 +51,8 @@ npx --yes github:ivanv33/depgraph-view#v0.3.0 validate play
 - Exit `1`: the plan loads, with warnings. stderr has one `warning: <message>` line per warning, the same lines the viewer prints at start, and the stdout line ends `N warnings` (`1 warning` for one).
 - Exit `2`: the plan is refused, the path is not found, the folder holds no plan file, or the command line is wrong. stderr has one line, `depgraph-view: <message>` (for a wrong command line, the message and the usage), and stdout is empty.
 
+Exit `1` with no summary line on stdout is npx itself failing (install, build, Node too old), not plan warnings: read its real output before judging the plan.
+
 Every message is in the tables of `references/format.md`. With `--json`, stdout is one JSON object instead of the summary line, `{"name": ..., "steps": N, "links": M, "warnings": [...], "errors": [...]}`, where a refused plan has `name` `null` and its message in `errors`; stderr is the same either way. A plan folder that is itself named `validate` is passed as `./validate`.
 
 A serving run with `--no-watch --port 0` still loads the plan, but it serves until stopped: use it only to show a snapshot, never to check.

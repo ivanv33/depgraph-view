@@ -64,7 +64,7 @@ function parseValidateArgs(argv: string[]): ValidateArgs | { help: string } | { 
   for (const a of argv) {
     if (a === '-h' || a === '--help') return { help: USAGE }
     if (a === '--json') json = true
-    else if (a.startsWith('-')) return { error: `unknown option for validate ${a}\n\n${USAGE}` }
+    else if (a.startsWith('-')) return { error: `validate does not take ${a}\n\n${USAGE}` }
     else if (path !== undefined) return { error: `one path only, got ${path} and ${a}\n\n${USAGE}` }
     else path = a
   }

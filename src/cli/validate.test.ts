@@ -60,6 +60,9 @@ describe('parseArgs validate', () => {
     for (const a of [['validate'], ['validate', 'a', 'b'], ['validate', 'a', '--port', '0'], ['validate', 'a', '--no-watch'], ['validate', 'a', '--open']])
       expect(parseArgs(a), a.join(' ')).toHaveProperty('error')
   })
+  it('says plainly that validate does not take a serving flag', () => {
+    expect(parseArgs(['validate', 'a', '--port', '0'])).toMatchObject({ error: expect.stringMatching(/^validate does not take --port\n/) })
+  })
   it('keeps `validate` as a path only after the command word', () => {
     expect(parseArgs(['./validate'])).toEqual({ path: './validate', open: false, watch: true })
     expect(parseArgs(['validate', 'validate'])).toEqual({ command: 'validate', path: 'validate', json: false })

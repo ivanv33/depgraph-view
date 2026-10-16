@@ -204,7 +204,7 @@ Read the exit code first, then the output:
 - `1`: the plan loads, with warnings. Each is a `warning: <message>` line on stderr, and the summary ends `N warnings`. Look each up in `references/format.md`, fix it, and run again.
 - `2`: the plan is refused (or the command line is wrong). stderr has one line, `depgraph-view: <message>`, and stdout is empty. Look the message up in `references/format.md`, fix it, and run again.
 
-Only exit `0` is a clean plan. The first run downloads and builds the viewer, which can take a minute or more: wait until it exits. Later runs take a second or two. `--yes` stops npx from waiting on an install prompt in a non-interactive shell.
+Exit `1` with no summary line on stdout is npx itself failing (install, build, Node too old), not plan warnings: read its real output before judging the plan. Only exit `0` is a clean plan. The first run downloads and builds the viewer, which can take a minute or more: wait until it exits. Later runs take a second or two. `--yes` stops npx from waiting on an install prompt in a non-interactive shell.
 
 When the user asked to see the plan, check first, then start the viewer as below once `validate` exits `0`. While it runs, it reloads by itself after every edit and prints nothing more, so after each batch of edits run `validate` again: it never touches the running viewer.
 

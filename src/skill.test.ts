@@ -418,6 +418,10 @@ describe('the check is validate', () => {
     expect(viewer).toContain(`\`${summaryLine('<name>', 2, 2, 0).replace('2 steps, 2 links', 'N steps, M links')}\``)
   })
 
+  it('SKILL.md and viewer.md tell an npx failure (exit 1, no summary line) from plan warnings', () => {
+    for (const rel of [SKILL_MD, VIEWER_MD]) expect(read(rel), rel).toContain('Exit `1` with no summary line on stdout is npx itself failing')
+  })
+
   it('the summary line in SKILL.md is what validate prints for the school play', () => {
     const r = loadIn(playFiles(), 'play')
     const line = summaryLine(r.plan.name, r.plan.nodes.length, r.plan.nodes.reduce((n, x) => n + x.depends_on.length, 0), r.warnings.length)
