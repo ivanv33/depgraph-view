@@ -79,6 +79,8 @@ export interface GraphProps {
   onGlides?: (history: readonly GlideSummary[]) => void
   /** Where focus goes when no label can take it (the page passes its group toggle). */
   focusFallback?: () => HTMLElement | null
+  /** Whether the host shows its legend in the bottom-left corner, so the frames keep its room clear (default true). */
+  legend?: boolean
 }
 
 /** The time of the animation frame being drawn (every part of one frame shares it), for the glide meter. */
@@ -118,7 +120,7 @@ function glideEdge(
   obj.add(...next.children)
 }
 
-export default function Graph({ plan, selected: selectedId, onSelect, grouped: grouping, today, insets: given, fitAll, onGlides, focusFallback }: GraphProps) {
+export default function Graph({ plan, selected: selectedId, onSelect, grouped: grouping, today, insets: given, fitAll, onGlides, focusFallback, legend = true }: GraphProps) {
   // The host's insets, one object while their numbers hold (a host may pass a fresh object every render).
   const { top, right, bottom, left } = given
   const insets = useMemo<Insets>(() => ({ top, right, bottom, left }), [top, right, bottom, left])
@@ -411,10 +413,10 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     plateArea.current = () => {
       const root = rootRef.current?.getBoundingClientRect()
       if (!root) return undefined
-      const strips = frameInsets(sizeRef.current, insets)
+      const strips = frameInsets(sizeRef.current, insets, legend)
       return { left: root.left + strips.left, top: root.top + strips.top, right: root.left + sizeRef.current.w - strips.right, bottom: root.top + sizeRef.current.h - strips.bottom }
     }
-  }, [insets])
+  }, [insets, legend])
 
   // The edge cues' tick (ChainEdgeCue.tsx), called on every animation frame by the graph's frame (zoomFrame below).
   const cueTick = useRef<(() => void) | null>(null)
@@ -727,7 +729,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       const camera = fgRef.current?.camera()
       if (camera === undefined) return null
       const viewSize = sizeRef.current
-      const strips = frameInsets(viewSize, insets)
+      const strips = frameInsets(viewSize, insets, legend)
       const area = strips
       const ids = selectedId === null ? [...layout.nodes.keys()] : [selectedId, ...near.upstream, ...near.downstream]
       let all = 0
@@ -781,7 +783,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       // Its circle as its label draws it (nodeLabel.ts sets --dot-r from the same DueView, SIZE.normal undated).
       const due = duesRef.current.get(focusId)
       const dot = { r: due?.radius ?? SIZE.normal, overdue: due?.overdue ?? false }
-      return { focus: { x: focus.x, y: -focus.y }, chain, insets, dot, top: Math.max(FRAME.topInset, insets.top) }
+      return { focus: { x: focus.x, y: -focus.y }, chain, insets, legend, dot, top: Math.max(FRAME.topInset, insets.top) }
     }
     frameSelection.current = () => {
       const now = { id: selectedId, right: insets.right, left: insets.left, bottom: insets.bottom, chain: chainKey, at: focusKey, view: viewKey }
@@ -821,7 +823,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       userMoved.clear()
     }
   })
-  useEffect(() => frameSelection.current(), [selectedId, insets.top, insets.right, insets.bottom, insets.left, chainKey, focusKey, settled.seq])
+  useEffect(() => frameSelection.current(), [selectedId, insets.top, insets.right, insets.bottom, insets.left, legend, chainKey, focusKey, settled.seq])
 
   // Closing the selection, and with nothing selected a change in which nodes are drawn (decks on or off, nodes added
   // or removed), re-fits the whole plan the way the first load does.
@@ -832,12 +834,12 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   // titles' first measure (the plan's first drawn steps) is the load's frame, which waits for that measure (fitOnce).
   useEffect(() => {
     const later = dragging.current || !!resizing.current?.pending()
-    if (fitTracker.see({ selectedId, drawn: drawnIds }, later) && titlesMeasured.current && fitPlan(host, insets)) userMoved.clear()
+    if (fitTracker.see({ selectedId, drawn: drawnIds }, later) && titlesMeasured.current && fitPlan(host, insets, legend)) userMoved.clear()
   }, [drawnIds, selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     fitAfterDrag.current = () => {
       if (resizing.current?.pending()) return
-      if (fitTracker.dragEnd() && fitPlan(host, insets)) userMoved.clear()
+      if (fitTracker.dragEnd() && fitPlan(host, insets, legend)) userMoved.clear()
     }
   })
   // With nothing selected, a settled new view size fits the whole plan into it again, as the first load does (unless
@@ -851,17 +853,17 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     if (!engineStopped.current || !titlesMeasured.current || dragging.current) return
     // A whole-plan fit that waited for the resize (the selection closed, or the drawn steps changed) is the one frame.
     if (fitTracker.dragEnd()) {
-      if (fitPlan(host, insets)) userMoved.clear()
+      if (fitPlan(host, insets, legend)) userMoved.clear()
       return
     }
     if (selectedId !== null || viewKey === before) return
-    if (shouldFrameResize({ userMoved: userMoved.moved(), hid: resizeHid() }, false) && fitPlan(host, insets)) userMoved.clear()
+    if (shouldFrameResize({ userMoved: userMoved.moved(), hid: resizeHid() }, false) && fitPlan(host, insets, legend)) userMoved.clear()
   }, [settled]) // eslint-disable-line react-hooks/exhaustive-deps
   // Fit: the whole plan, whatever is selected (the selection and its panel stay). Only a press made while this
   // graph is mounted counts: a plan switch remounts it under the old count.
   useNewPress(fitAll, () => {
     userMoved.clear()
-    fitPlan(host, insets)
+    fitPlan(host, insets, legend)
   })
   // Each deck is drawn as one node whose look comes from its members; a zoom step that lists as many keeps the same map.
   const deckViews = useDeckViews(plan, view, today, states, selectedId, deckWords, deckKeyAtRef)
@@ -1309,7 +1311,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
     const camera = fg?.camera() as THREE.PerspectiveCamera | undefined
     if (!fg || !root || !camera || !(camera.position.z > 0)) return
     const { w, h } = sizeRef.current
-    const strips = frameInsets(sizeRef.current, insets)
+    const strips = frameInsets(sizeRef.current, insets, legend)
     const area = { left: root.left + strips.left, top: root.top + strips.top, right: root.left + w - strips.right, bottom: root.top + h - strips.bottom }
     const target = (fg.controls() as unknown as { target: THREE.Vector3 }).target
     const at = {
@@ -1339,7 +1341,7 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   // they lie past says how many (ChainEdgeCue.tsx). The free area is the one a selection is framed in, from the host's
   // insets (no layout read); the scene is where the chain's circles and every card are drawn now,
   // projected from the camera, read on the frame tick.
-  const cueStrips = frameInsets(size, insets)
+  const cueStrips = frameInsets(size, insets, legend)
   const cueArea = useMemo(
     // the view less the host's insets (and the legend's strip), as a selection is framed in
     () => ({

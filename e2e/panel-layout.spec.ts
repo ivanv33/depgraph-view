@@ -65,12 +65,34 @@ for (const [width, height] of [[768, 1024], [390, 844]] as const) {
     expect(panel.y, 'below the toolbar').toBeGreaterThan(toolbar.y + toolbar.height)
     const dot = await labelBox(page, 'build-bed')
     expect(dot.y + dot.height, 'the selected step is above the sheet').toBeLessThan(panel.y)
+    expect(dot.y, 'and below the toolbar').toBeGreaterThan(toolbar.y + toolbar.height)
     // the toolbar's controls take real clicks with the panel open
     await page.getByTestId('fit-plan').click()
     await page.getByTestId('search').fill('sow')
     await page.getByTestId('search').press('Enter')
     await expect(page).toHaveURL(/\?step=sow-beans$/)
     await expect(page.getByTestId('panel').getByRole('heading', { level: 2 })).toHaveText('Sow the beans')
+  })
+}
+
+for (const [width, height] of [[844, 390], [667, 375]] as const) {
+  test(`at ${width}x${height} (a phone on its side) the panel is a side sheet that leaves the graph its height`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await page.goto(`${url}?step=build-bed`)
+    await expect(page.getByTestId('panel-sheet')).toHaveAttribute('data-sheet', 'side')
+    await waitForStill(page)
+    const panel = await box(page, 'panel')
+    const toolbar = await box(page, 'toolbar')
+    expect(panel.width, 'a third of the width, or its 18rem floor').toBeLessThanOrEqual(Math.max(288, width * 0.34))
+    expect(panel.x, 'the graph keeps more than half the width').toBeGreaterThan(width * 0.5)
+    const overlaps = panel.x < toolbar.x + toolbar.width && panel.y < toolbar.y + toolbar.height
+    expect(overlaps, 'the panel stays clear of the toolbar').toBe(false)
+    expect(panel.y + panel.height, 'inside the window').toBeLessThanOrEqual(height - 15)
+    const dot = await labelBox(page, 'build-bed')
+    expect(dot.x + dot.width, 'the selected step is left of the panel').toBeLessThan(panel.x)
+    expect(dot.y, 'below the toolbar').toBeGreaterThan(toolbar.y + toolbar.height)
+    await expect(page.getByTestId('legend'), 'no room for the legend beside the panel').toHaveCount(0)
+    await page.getByTestId('fit-plan').click()
   })
 }
 

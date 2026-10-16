@@ -463,7 +463,9 @@ describe('fitTitles', () => {
       for (let r = 0; r < 5; r++) fitTitles(labels)
       batches.push((performance.now() - t0) / 5)
     }
-    expect(Math.min(...batches)).toBeLessThan(8)
+    // 20 ms: run alone this measured about 6 ms, and inside the full parallel suite on a loaded machine 10-13 ms, so the
+    // limit holds under load and still fails a rule some three times slower than now
+    expect(Math.min(...batches)).toBeLessThan(20)
     const out = fitTitles(labels)
     expect([...out.values()].filter(f => f.fit !== 'dot').length).toBeGreaterThan(20)
     // Nothing drawn overlaps: every label's words as drawn against every other label's words and circle. Only the

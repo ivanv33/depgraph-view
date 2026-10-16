@@ -145,8 +145,8 @@ for (const vp of [
       await label(page, 'a3-2').dispatchEvent('click')
       await expect(label(page, 'a3-2')).toHaveAttribute('data-selected', 'true')
       await waitForStill(page, 30000)
-      // dispatched, not clicked: at 390x844 the open panel covers the toolbar's Fit button
-      const s = await timed(page, 'fit', vp, () => page.getByTestId('fit-plan').dispatchEvent('click'))
+      // a real click: the toolbar sits above the open panel at every viewport
+      const s = await timed(page, 'fit', vp, () => page.getByTestId('fit-plan').click())
       checkShape(s, 'F')
       expect(s.kinds, 'only the camera moves').toEqual(['camera'])
       expect(s.counts.nodeObjects, 'no step is built again for a camera move').toBe(0)
