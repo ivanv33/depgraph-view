@@ -195,7 +195,7 @@ First, a reading pass while you edit, because it is cheap and catches mistakes b
 Then the authoritative check: the viewer's own loader, run once without watching and on a port the OS picks. Run it in the background, with its output in your own scratch place as `references/viewer.md` says under "What it prints", from the folder that contains `play/`, or pass the plan folder's path. In both commands here, replace `play` with your own plan folder or `.yaml` path:
 
 ```sh
-npx --yes github:ivanv33/depgraph-view#v0.2.2 play --no-watch --port 0
+npx --yes github:ivanv33/depgraph-view#v0.3.0 play --no-watch --port 0
 ```
 
 - If it exits with code 1, its stderr line (`depgraph-view: <message>`) is the refusal. Look it up in `references/format.md`, fix it, and run again.
@@ -209,7 +209,7 @@ When the user asked to see the plan, the check and the showing are one run: star
 ## Showing the plan
 
 ```sh
-npx --yes github:ivanv33/depgraph-view#v0.2.2 play
+npx --yes github:ivanv33/depgraph-view#v0.3.0 play
 ```
 
 - Run it in the background so the session stays free. It prints the URL on stdout and serves until stopped. Give the user the URL, read from that output.

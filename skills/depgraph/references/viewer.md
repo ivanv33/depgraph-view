@@ -5,10 +5,10 @@ Everything the skill needs to know about the viewer's command line, ports, netwo
 ## The command
 
 ```sh
-npx --yes github:ivanv33/depgraph-view#v0.2.2 play
+npx --yes github:ivanv33/depgraph-view#v0.3.0 play
 ```
 
-Replace `play` with the plan folder or the plan's `.yaml` path, and run it from the folder that contains `play/`, or pass the plan folder's full path. Keep the `#v0.2.2` pin: it is the release whose loader enforces the format this skill teaches. `--yes` stops npx from waiting on an install prompt in a non-interactive shell.
+Replace `play` with the plan folder or the plan's `.yaml` path, and run it from the folder that contains `play/`, or pass the plan folder's full path. Keep the `#v0.3.0` pin: it is the release whose loader enforces the format this skill teaches. `--yes` stops npx from waiting on an install prompt in a non-interactive shell.
 
 The usage, as `--help` prints it:
 
@@ -38,7 +38,7 @@ Where the output goes: use the session tool's own background-run feature when it
 ## The check run
 
 ```sh
-npx --yes github:ivanv33/depgraph-view#v0.2.2 play --no-watch --port 0
+npx --yes github:ivanv33/depgraph-view#v0.3.0 play --no-watch --port 0
 ```
 
 `--port 0` lets the operating system pick a free port, so it never clashes; `--no-watch` loads the plan once and does not follow the files. It still serves until stopped: read stdout and stderr, then stop it as in "Stopping". Never add `--host` to the check run.
