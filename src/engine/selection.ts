@@ -53,3 +53,22 @@ export interface NodeSignal {
 export function nextSignal(prev: NodeSignal | null, id: string): NodeSignal {
   return { id, seq: (prev?.seq ?? 0) + 1 }
 }
+
+/** How long a step marked from outside stays marked, ms. */
+export const MARK_MS = 2400
+/** How often, at most, the marks are put back while any is due, ms. */
+export const MARK_CHECK_MS = 100
+
+/** The marks due at `now`: the ids still marked, and the ids whose time is up (dropped from `until`). */
+export function marksDue(until: Map<string, number>, now: number): { shown: string[]; ended: string[] } {
+  const shown: string[] = []
+  const ended: string[] = []
+  for (const [id, t] of until) {
+    if (t > now) shown.push(id)
+    else {
+      ended.push(id)
+      until.delete(id)
+    }
+  }
+  return { shown, ended }
+}

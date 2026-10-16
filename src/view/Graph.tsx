@@ -3,12 +3,16 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import * as THREE from 'three'
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
-import { keepScale, labelScale, panFor, pressStops, pxPerUnit } from '../engine/camera.js'
+import { cameraFor, distanceFor, keepScale, labelScale, panFor, pressStops, pxPerUnit } from '../engine/camera.js'
 import {
   doneForFrame,
   fitOnce,
   fitPlan,
   FRAME,
+  flyAt,
+  FLY_PX_PER_UNIT,
+  flyStep,
+  flyTakesFrame,
   frameInsets,
   framingInsets,
   planFitTracker,
@@ -16,6 +20,7 @@ import {
   previewPlan,
   previewSelection,
   selectionFrame,
+  selectedReach,
   selectionFrameStep,
   shouldFrameResize,
   sizeSettler,
@@ -33,6 +38,7 @@ import { burstFrame, prefersReducedMotion, takeNewlyDone } from '../engine/effec
 import { placeNodes, structureKey, toGraphData, type GraphLink, type GraphNode } from '../engine/graphData.js'
 import { backgroundAction, backgroundEffect } from '../engine/backgroundClick.js'
 import { DOT, labelFor, onSelectedText, pickModeOf, shakeLabel, stackLabels, syncLabels, type LabelNode, type PickMode } from '../engine/nodeLabel.js'
+import { MARK_CHECK_MS, MARK_MS, marksDue, type NodeSignal } from '../engine/selection.js'
 import { shiftHeld } from '../engine/shiftHeld.js'
 import { idleLink, shiftLinkStep, type ShiftLinkEvent, type ShiftLinkState } from '../engine/shiftLink.js'
 import type { Plan, Status } from '../engine/schema.js'
@@ -119,6 +125,20 @@ export interface GraphProps {
    * the edge cues' free area ends at its top). The cues and a deck's list keep clear of them.
    */
   chrome?: HostChrome
+  /**
+   * A step to fly to: a new `seq` glides the camera to put the step (a step folded into a deck: its deck) in the free
+   * area the frames keep, once the view has settled and the step is still the selected one. Without it nothing flies.
+   */
+  flyTo?: NodeSignal | null
+  /** A step whose label shakes: a new `seq` shakes it once (a refusal, say). */
+  shake?: NodeSignal | null
+  /**
+   * Steps to mark: a new `seq` puts `data-added="true"` on their labels for a couple of seconds (the host styles it, as
+   * the viewer's own label sheet does). A step not drawn yet is marked once it is.
+   */
+  marked?: { ids: string[]; seq: number } | null
+  /** Called with the decks opened to show their members, each time they change (a selection that moves on drops them). */
+  onOpenedDone?: (ids: ReadonlySet<string>) => void
 }
 
 /** The time of the animation frame being drawn (every part of one frame shares it), for the glide meter. */
@@ -160,7 +180,7 @@ function glideEdge(
   obj.add(...next.children)
 }
 
-export default function Graph({ plan, selected: selectedId, onSelect, grouped: grouping, today, insets: given, fitAll, onGlides, focusFallback, legend = true, passiveInsets, chrome, onShiftLink, onPick: hostPick, arming = false, onAddAt, onLinkContextMenu }: GraphProps) {
+export default function Graph({ plan, selected: selectedId, onSelect, grouped: grouping, today, insets: given, fitAll, onGlides, focusFallback, legend = true, flyTo = null, shake = null, marked = null, onOpenedDone, passiveInsets, chrome, onShiftLink, onPick: hostPick, arming = false, onAddAt, onLinkContextMenu }: GraphProps) {
   // The host's insets, one object while their numbers hold (a host may pass a fresh object every render).
   const { top, right, bottom, left } = given
   const insets = useMemo<Insets>(() => ({ top, right, bottom, left }), [top, right, bottom, left])
@@ -314,6 +334,13 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   // A selection that moves on (Escape, another step) drops them, so coming back to the step finds them folded.
   if (openedDone.sel !== selectedId && openedDone.ids.size > 0) setOpenedDone({ sel: selectedId, ids: NO_IDS })
   const opened = openedDone.sel === selectedId ? openedDone.ids : NO_IDS
+  const reportOpened = useRef(onOpenedDone)
+  useEffect(() => {
+    reportOpened.current = onOpenedDone
+  })
+  useEffect(() => {
+    reportOpened.current?.(opened)
+  }, [opened])
   // The done decks drawn now, and the selection they belong to, for a click on one.
   const doneDecks = useRef<{ sel: string | null; ids: Set<string> }>({ sel: null, ids: new Set() })
   // The branch deck whose steps are listed in place (DeckList), under the selection it was opened for.
@@ -713,6 +740,10 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   // With decks on, only the path to the selection and its subtree are drawn; the rest folds into decks.
   // With a selection, its finished needs fold into done decks too, except those opened by a click.
   const view = useMemo(() => deckView(plan, selectedId, grouping, opened), [plan, selectedId, grouping, opened])
+  // The last fly signal acted on (its seq).
+  const flown = useRef<number | null>(null)
+  // The drawn node a fly goes to (a step folded into a deck: its deck), if there is one yet.
+  const flyNode = (fly: NodeSignal | null) => (fly ? cache.get(view.hidden.get(fly.id)?.[0] ?? fly.id) : undefined)
   useEffect(() => {
     doneDecks.current = { sel: selectedId, ids: new Set([...view.decks.values()].filter(d => d.done).map(d => d.id)) }
   }, [view, selectedId])
@@ -915,6 +946,13 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
       if (step !== 'frame' || selectedId === null) return
       // No view to frame in yet (its size is 0): the frame would have no position. Left unmade, it is tried again.
       if (!(viewSize.w > 0 && viewSize.h > 0)) return
+      // A fly to this same step arrives with it: the fly owns the camera. Starting the chain frame too would make the
+      // fly cut it short. A fly with no drawn step to go to leaves it.
+      if (flyTakesFrame(flyTo, flown.current, selectedId, !!fg && flyNode(flyTo) !== undefined)) {
+        framed.current = now
+        userMoved.clear()
+        return
+      }
       const sel = selection()
       const frame = fg && sel && selectionFrame(host, sel)
       if (!frame) return
@@ -974,6 +1012,73 @@ export default function Graph({ plan, selected: selectedId, onSelect, grouped: g
   const deckViews = useDeckViews(plan, view, today, states, selectedId, deckWords, deckKeyAtRef)
   // Decks drawn afresh (Group on, a new selection) list as many names as the zoom they arrive at leaves room for.
   useEffect(showDeckWords, [showDeckWords, deckViews])
+
+  // A fly asked for during a resize waits for it to settle, then flies once at the final size; until then it is not
+  // flown, so the selection's frame at the settle leaves the camera to it. One whose step is no longer selected by
+  // then is dropped: the fit or the new step's frame owns the camera.
+  useEffect(() => {
+    const fg = fgRef.current
+    const viewSize = sizeRef.current
+    const step = flyStep(flyTo, flown.current, {
+      selectedId,
+      resizing: !!resizing.current?.pending(),
+      viewEmpty: !(viewSize.w > 0 && viewSize.h > 0),
+    })
+    if (step === 'drop') flown.current = flyTo!.seq
+    if (step !== 'fly') return
+    flown.current = flyTo!.seq
+    const node = flyNode(flyTo)
+    if (!fg || !node) return
+    const fov = (fg.camera() as THREE.PerspectiveCamera).fov
+    const target = cameraFor(node, distanceFor(FLY_PX_PER_UNIT, fov, sizeRef.current.h))
+    // The step lands in the free area the frames keep (the host's insets and passive strips, the legend's strip),
+    // moved as little as it takes to keep it as drawn (its brackets and plate) inside that room.
+    const { w, h } = sizeRef.current
+    const strips = frameInsets(sizeRef.current, framingInsets(insets, passiveRef.current), legend)
+    const due = duesRef.current.get(view.hidden.get(flyTo!.id)?.[0] ?? flyTo!.id)
+    const reach = selectedReach(FLY_PX_PER_UNIT, due?.scale ?? 1, { r: due?.radius ?? SIZE.normal, overdue: due?.overdue ?? false })
+    const at = flyAt(sizeRef.current, strips, reach)
+    const unitsPerPx = (2 * Math.tan((fov * Math.PI) / 360) * target.position.z) / h
+    // Screen x grows with the plane's x, screen y against it (y up in the plane).
+    const shiftX = (at.x - w / 2) * unitsPerPx, shiftY = (at.y - h / 2) * unitsPerPx
+    const position = { ...target.position, x: target.position.x - shiftX, y: target.position.y + shiftY }
+    const lookAt = { ...target.lookAt, x: target.lookAt.x - shiftX, y: target.lookAt.y + shiftY }
+    moveCamera(position, lookAt, 800)
+    userMoved.clear()
+  }, [flyTo, cache, settled.seq, selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const el = shake ? labels.get(shake.id) : undefined
+    if (el) shakeLabel(el)
+  }, [shake, labels])
+
+  // Steps marked from outside: data-added on their labels until their time is up. A label may only be drawn a render
+  // later, or drawn again, so the marks are put back every MARK_CHECK_MS while any is due.
+  const markedUntil = useRef(new Map<string, number>())
+  const markedSeq = useRef<number | null>(null)
+  useEffect(() => {
+    if (marked && marked.seq !== markedSeq.current) {
+      markedSeq.current = marked.seq
+      for (const id of marked.ids) markedUntil.current.set(id, Date.now() + MARK_MS)
+    }
+    const mark = () => {
+      const { shown, ended } = marksDue(markedUntil.current, Date.now())
+      for (const id of shown) {
+        const el = labels.get(id)
+        if (el && el.dataset.added !== 'true') el.dataset.added = 'true'
+      }
+      for (const id of ended) {
+        const el = labels.get(id)
+        if (el) delete el.dataset.added
+      }
+      return markedUntil.current.size > 0
+    }
+    if (!mark()) return
+    const t = setInterval(() => {
+      if (!mark()) clearInterval(t)
+    }, MARK_CHECK_MS)
+    return () => clearInterval(t)
+  }, [marked, labels, plan, deckViews])
   // How much larger than its slot each drawn node draws by its due date (a deck by its nearest member's); 1 undated.
   // Each drawn node's due date as its label draws it (a deck's by its nearest member's): its scale, its circle.
   const dues = useMemo(() => {

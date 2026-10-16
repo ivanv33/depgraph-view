@@ -17,8 +17,9 @@ describe('Graph and its companions keep the cut', () => {
   })
   it('Graph declares exactly the cut props', () => {
     const src = readFileSync('src/view/Graph.tsx', 'utf8')
-    const block = src.slice(src.indexOf('export interface GraphProps'), src.indexOf('}', src.indexOf('export interface GraphProps')))
+    const start = src.indexOf('export interface GraphProps')
+    const block = src.slice(start, src.indexOf('\n}', start)) // the interface's own closing brace: a prop's type may hold braces
     const names = [...block.matchAll(/^\s+(\w+)\??:/gm)].map(m => m[1]).sort()
-    expect(names).toEqual(['arming', 'chrome', 'fitAll', 'focusFallback', 'grouped', 'insets', 'legend', 'onAddAt', 'onGlides', 'onLinkContextMenu', 'onPick', 'onSelect', 'onShiftLink', 'passiveInsets', 'plan', 'selected', 'today'])
+    expect(names).toEqual(['arming', 'chrome', 'fitAll', 'flyTo', 'focusFallback', 'grouped', 'insets', 'legend', 'marked', 'onAddAt', 'onGlides', 'onLinkContextMenu', 'onOpenedDone', 'onPick', 'onSelect', 'onShiftLink', 'passiveInsets', 'plan', 'selected', 'shake', 'today'])
   })
 })

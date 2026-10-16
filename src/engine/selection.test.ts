@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initialSelection, nextSignal, selectionStep, type SelectionState } from './selection.js'
+import { initialSelection, MARK_MS, MARK_CHECK_MS, marksDue, nextSignal, selectionStep, type SelectionState } from './selection.js'
 
 const none = { type: 'none' }
 const selected = (id: string): SelectionState => ({ selectedId: id, arming: false })
@@ -78,5 +78,17 @@ describe('nextSignal', () => {
     expect(one).toEqual({ id: 'a', seq: 1 })
     expect(nextSignal(one, 'a')).toEqual({ id: 'a', seq: 2 })
     expect(nextSignal(one, 'b')).toEqual({ id: 'b', seq: 2 })
+  })
+})
+
+describe('marksDue', () => {
+  it('shows the ids still due and ends the rest, whatever the plan holds', () => {
+    expect(MARK_MS).toBe(2400)
+    expect(MARK_CHECK_MS).toBe(100)
+    const until = new Map([['sow-beans', 2400], ['water-rota', 1000]])
+    expect(marksDue(until, 1500)).toEqual({ shown: ['sow-beans'], ended: ['water-rota'] })
+    expect([...until.keys()]).toEqual(['sow-beans'])
+    expect(marksDue(until, 2400)).toEqual({ shown: [], ended: ['sow-beans'] })
+    expect(until.size).toBe(0)
   })
 })
