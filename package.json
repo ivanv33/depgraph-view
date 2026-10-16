@@ -1,6 +1,18 @@
 {
   "name": "depgraph-view",
   "version": "0.1.0",
+  "description": "A read-only 3D viewer for dependency graphs: point it at a graph.json and browse the plan on localhost, with live reload.",
+  "keywords": [
+    "dependency-graph",
+    "graph",
+    "viewer",
+    "3d",
+    "force-graph",
+    "plan",
+    "markdown",
+    "cli"
+  ],
+  "repository": "github:ivanv33/depgraph-view",
   "license": "MIT",
   "type": "module",
   "bin": {
