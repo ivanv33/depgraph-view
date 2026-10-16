@@ -3,9 +3,9 @@ import path from 'node:path'
 import { ID_RE, validatePlan, type Plan, type PlanNode } from '../engine/schema.js'
 import { COMMON_KEYS, NodeFileError, nodeFromFile, parseFrontmatter, splitNodeFile } from './frontmatter.js'
 import { listFiles, within } from './paths.js'
+import { GraphError } from './planYaml.js'
 
-/** A graph file that cannot be shown: bad shape, unreadable frontmatter or a plan validatePlan refuses. */
-export class GraphError extends Error {}
+export { GraphError } from './planYaml.js'
 
 export interface LoadResult {
   plan: Plan
