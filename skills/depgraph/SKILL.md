@@ -195,7 +195,7 @@ First, a reading pass while you edit, because it is cheap and catches mistakes b
 Then the authoritative check: the viewer's `validate` command, which loads the plan with the viewer's own loader, prints what it found and exits. It serves nothing and opens nothing, so there is no port and nothing to stop. Run it from the folder that contains `play/`, or pass the plan folder's path; replace `play` with your own plan folder or `.yaml` path:
 
 ```sh
-npx --yes github:ivanv33/depgraph-view#v0.3.0 validate play
+npx --yes github:ivanv33/depgraph-view#v0.3.1 validate play
 ```
 
 Read the exit code first, then the output:
@@ -211,7 +211,7 @@ When the user asked to see the plan, check first, then start the viewer as below
 ## Showing the plan
 
 ```sh
-npx --yes github:ivanv33/depgraph-view#v0.3.0 play
+npx --yes github:ivanv33/depgraph-view#v0.3.1 play
 ```
 
 - Run it in the background so the session stays free. It prints the URL on stdout and serves until stopped. Give the user the URL, read from that output.

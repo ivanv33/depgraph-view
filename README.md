@@ -7,7 +7,7 @@ A read-only 3D viewer for dependency graphs. Point it at a plan YAML file that l
 ## Quick start
 
 ```sh
-npx github:ivanv33/depgraph-view#v0.3.0 garden
+npx github:ivanv33/depgraph-view#v0.3.1 garden
 ```
 
 `garden` is a folder holding the plan file `garden.yaml` (see [The plan file](#the-plan-file)). This runs the viewer straight from GitHub. A git install builds from source, so the first run takes a minute.
@@ -44,13 +44,13 @@ npx https://github.com/ivanv33/depgraph-view garden
 To pin a release, add its tag:
 
 ```sh
-npx github:ivanv33/depgraph-view#v0.3.0 garden
+npx github:ivanv33/depgraph-view#v0.3.1 garden
 ```
 
 As a dependency in `package.json`:
 
 ```json
-"depgraph-view": "github:ivanv33/depgraph-view#v0.3.0"
+"depgraph-view": "github:ivanv33/depgraph-view#v0.3.1"
 ```
 
 A git install builds the package from source, so it is slower than installing the npm package.
@@ -254,6 +254,7 @@ Version 0.1.0 read a JSON graph file. A `.json` path, or a folder with no `.yaml
 <img src="https://raw.githubusercontent.com/ivanv33/depgraph-view/main/docs/graph.png" width="830" alt="The same garden plan with no step selected: eight steps in layers, dependencies drawn as arrows, the toolbar top left and the legend bottom left">
 
 - **The graph.** Each step is a node with its title, laid out in layers along its dependencies. Click a step to select it. Click the background to clear the selection. Escape clears it too.
+- **Framing.** The first fit uses the room the toolbar, the panel and the legend leave, so the plan fills the free area from the start. The legend keeps only the room its corner needs: when the plan would not reach that corner it takes no strip. The view frames again when those strips change (the panel opens or closes, the window resizes), unless you have moved the camera since the last frame or a `flyTo` placed it. There is no API change.
 - **The toolbar** (top left) holds the search box and two buttons. `Group` draws only the path to the selection and its subtree, and folds every other branch into a deck. It is on by default, and the browser remembers your choice. `Fit` frames the whole plan and keeps the selection.
 - **Search** matches steps by title or by id. Up and Down move the highlight, Enter or a click selects the step, and Escape clears the box.
 - **The panel** opens for the selected step: at the right on a wide or landscape window, along the bottom on a narrow portrait one (a phone, a tablet upright, a narrow pane), with the graph framed in the room left beside or above it. It is as tall as its content; a long step scrolls under its title. It shows the title, the readiness state, the priority, the due date and the tags when set, and the md body as markdown. Under it are the steps it depends on and the steps that need it, each a button that selects that step. Last is the step's file list. Each file opens in a new tab from `/files/<id>/<path>`.

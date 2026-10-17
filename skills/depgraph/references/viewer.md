@@ -5,10 +5,10 @@ Everything the skill needs to know about the viewer's command line, the `validat
 ## The command
 
 ```sh
-npx --yes github:ivanv33/depgraph-view#v0.3.0 play
+npx --yes github:ivanv33/depgraph-view#v0.3.1 play
 ```
 
-Replace `play` with the plan folder or the plan's `.yaml` path, and run it from the folder that contains `play/`, or pass the plan folder's full path. Keep the `#v0.3.0` pin: it is the release whose loader enforces the format this skill teaches. `--yes` stops npx from waiting on an install prompt in a non-interactive shell.
+Replace `play` with the plan folder or the plan's `.yaml` path, and run it from the folder that contains `play/`, or pass the plan folder's full path. Keep the `#v0.3.1` pin: it is the release whose loader enforces the format this skill teaches. `--yes` stops npx from waiting on an install prompt in a non-interactive shell.
 
 The usage, as `--help` prints it:
 
@@ -42,7 +42,7 @@ Where the output goes: use the session tool's own background-run feature when it
 ## The check: `validate`
 
 ```sh
-npx --yes github:ivanv33/depgraph-view#v0.3.0 validate play
+npx --yes github:ivanv33/depgraph-view#v0.3.1 validate play
 ```
 
 `validate` loads the plan once with the viewer's own loader and exits. It binds no port, opens no browser and follows no files, so it needs no background run, no scratch files and no stopping: run it in the foreground and read its exit code and output.

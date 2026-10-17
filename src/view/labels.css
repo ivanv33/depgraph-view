@@ -488,7 +488,7 @@
 [data-arming='true'] .node-label,
 [data-shift='true'] .node-label { cursor: crosshair; }
 
-/* A step just added from the chat: a soft ring that widens and fades once; held still under reduced motion. */
+/* A step marked data-added: a soft ring that widens and fades once; held still under reduced motion. */
 @keyframes dg-added {
   0% { box-shadow: var(--ring, 0 0 #0000), 0 0 0 0 rgb(110 231 160 / 0.9); }
   70% { box-shadow: var(--ring, 0 0 #0000), 0 0 0 10px rgb(110 231 160 / 0.25); }

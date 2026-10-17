@@ -208,11 +208,6 @@ export const bottomInsetFor = (hudHeight: number | null, folded = false): number
 export type SelectionFrameKey = { id: string | null; right: number; left?: number; bottom?: number; top?: number; legend?: boolean; chain?: string; at?: string; view?: string; folded?: boolean }
 
 /**
- * The camera as it is: whether the user has zoomed or panned since the last automatic frame (`userMoved`), and
- * whether the chain is now covered by a strip or out of view (`covered`, measured with the new strips). For a new view
- * size, `hid`: whether the resize hid a step that was in view just before it began (hidStep).
- */
-/**
  * The camera as the selection's frame sees it: moved by the user since the last frame, the chain covered by a strip
  * or out of view, a step hidden by the last resize, and `flown` while a flyTo (not a frame) last placed it.
  */
